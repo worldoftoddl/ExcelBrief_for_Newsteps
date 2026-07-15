@@ -29,7 +29,10 @@ def resolve_model(spec: str):
             base_url=os.environ.get("LOCAL_LLM_BASE_URL", "http://localhost:11434/v1"),
             api_key=os.environ.get("LOCAL_LLM_API_KEY", "not-needed"),
         )
-    return init_chat_model(spec)
+    # output_version="v1": 스트리밍 병합 시 thinking 블록이 signature만 남아
+    # 다음 턴 재전송에서 400(thinking.thinking Field required)이 나는 문제 회피 —
+    # 표준 콘텐츠 블록으로 왕복 직렬화한다.
+    return init_chat_model(spec, output_version="v1")
 
 
 async def graph(config: RunnableConfig):
