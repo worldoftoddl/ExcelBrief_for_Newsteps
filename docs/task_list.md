@@ -90,10 +90,18 @@
 
 ### 4b — 백엔드 연결 엔드투엔드
 
-- [ ] `langgraph dev`(:2024) + UI 동시 기동, 조서 해석 대화 1건 완주
-- [ ] 스트리밍 표시·도구 호출(excel_*·standards_*) 렌더링·스레드 이어가기 확인
+- [x] `langgraph dev`(:2024) + UI 동시 기동, 조서 해석 대화 1건 완주
+      (UI가 쓰는 동일 API 경로 — threads → runs/stream(messages-tuple) — 로 검증:
+      3650 조서 질문에 excel_* 7회 + standards_search 4회, 셀 주소 인용 답변)
+- [x] **버그 수정**: 스트리밍 병합 시 thinking 블록이 signature만 남아 다음 턴
+      재전송에서 Anthropic 400(`thinking.thinking Field required`) —
+      `output_version="v1"`(표준 콘텐츠 블록)으로 해결. 비스트리밍(pytest) 경로에선
+      재현 안 되던 문제. 전체 테스트 30개 통과 재확인
+- [x] 스트리밍(토큰 단위 285 이벤트)·스레드 이어가기("방금 그 조서" 후속 질문이
+      문맥 유지)·CORS preflight(:3000 오리진 허용) 확인
 
 **완료 기준**: 브라우저에서 조서 해석 대화가 처음부터 끝까지 동작.
+→ 서버측 전 구간 검증 완료, 브라우저 육안 확인만 남음 (사용자 확인 대기)
 
 ### 4c — 브랜딩·커스터마이징
 
