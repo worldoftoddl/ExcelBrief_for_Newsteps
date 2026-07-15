@@ -1,0 +1,121 @@
+# 시스템 설계 — ExcelBrief for Newsteps
+
+> 상세 흐름·인터페이스·데이터 계약. 구성요소 개관은 [architecture.md](architecture.md) 참조.
+
+## 1. 핵심 흐름 — 조서 해석 요청
+
+```
+사용자: "data/workpapers/D-10 매출채권.xlsx 해석해줘"
+  │
+  ▼ agent-chat-ui → LangGraph API (thread 생성/이어가기, config.configurable.model 포함)
+  ▼ 에이전트 루프 (create_agent)
+  1. excel_workbook_overview(경로)        → 시트 목록·크기·헤더 파악
+  2. excel_read_range(시트, 범위)          → 핵심 영역 정독 (필요 시 반복)
+  3. excel_read_range(..., formulas=True) → 계산 로직 확인
+  4. standards_search("매출채권 조회확인 …") → 관련 기준 문단 검색
+  5. standards_get_paragraph(cid, context) → 인용 원문 확정
+  6. (필요 시) standards_define_terms      → 용어 정의
+  ▼
+최종 답변: 수행 절차 해석 + 근거 기준 cid 인용 + 추가 필요 절차
+  ▼ SSE 스트리밍으로 UI에 토큰 단위 전달
+```
+
+## 2. 에이전트 정의
+
+```python
+# src/agent/graph.py (개요)
+from langchain.agents import create_agent
+from langchain.chat_models import init_chat_model
+
+def make_graph(config):
+    model_spec = config["configurable"].get("model", DEFAULT_MODEL)
+    model = resolve_model(model_spec)          # 아래 3절
+    tools = excel_tools() + await_mcp_tools()  # 아래 4·5절
+    return create_agent(model, tools=tools, system_prompt=SYSTEM_PROMPT)
+```
+
+- `langgraph.json`의 graph 진입점이 이 팩토리를 가리킨다.
+- 시스템 프롬프트(`prompts.py`)에 조서 해석 지침을 담는다:
+  탐색 순서(개요→정독), 인용 규칙(모든 기준 언급에 cid 병기),
+  미완성 조서 판단 기준, 범용 Excel일 때의 폴백 동작.
+
+## 3. 모델 라우팅
+
+| 라우트 키 (`configurable.model`) | 해석 |
+|---|---|
+| `anthropic:<model-id>` (기본) | 상용 Anthropic API. 예: `anthropic:claude-sonnet-5` |
+| `local:<model-name>` | 로컬 OpenAI 호환 서버. `init_chat_model("openai:<name>", base_url=LOCAL_LLM_BASE_URL, api_key="unused")` |
+
+- `resolve_model()`이 접두사로 분기. 라우트 추가는 이 함수만 수정.
+- `LOCAL_LLM_BASE_URL`은 `.env`로 주입 (vLLM/Ollama 어느 쪽이든 동일 인터페이스).
+- UI 쪽은 assistant 설정(`config.configurable`)에 model 값을 넣어 전환.
+
+## 4. Excel 도구 명세 (MVP 4종)
+
+모든 도구는 `data/workpapers/` 하위 경로만 허용 (경로 탈출 차단).
+
+| 도구 | 입력 | 출력 |
+|---|---|---|
+| `excel_workbook_overview` | `path` | 시트별 {이름, 행×열 크기, 첫 행(헤더) 미리보기, 병합 셀 수}. 워크북 전체 지도 |
+| `excel_read_range` | `path, sheet, range, mode=values\|formulas` | 범위 셀 값(또는 수식)을 마크다운 표로. 상한: 1회 500셀 — 초과 시 분할 안내 반환 |
+| `excel_find` | `path, query, sheet?` | 문자열 매칭 셀 좌표 목록 (계정명·틱마크 탐색용) |
+| `excel_sheet_stats` | `path, sheet` | 데이터 밀도, 수식 셀 비율, 숫자/문자 분포 — 정독 우선순위 판단용 |
+
+- 구현: openpyxl `read_only=False`(수식 문자열 접근) + `data_only` 이중 로드.
+- 반환은 전부 텍스트(마크다운) — 모델 비의존적.
+- 타 언어 도구(예: SpreadsheetLLM 재구현체)는 같은 시그니처의 도구로 감싸 추가 (백로그).
+
+## 5. MCP 연결
+
+```python
+# src/agent/mcp_client.py (개요)
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+client = MultiServerMCPClient({
+    "auditpaper-standards": {           # 기본: HTTP 원격 (HF Space 상시 배포)
+        "transport": "streamable_http",
+        "url": MCP_HTTP_URL,            # https://toddl-auditpaper-mcp.hf.space/mcp
+        "headers": {"Authorization": f"Bearer {MCP_AUTH_TOKEN}"},
+    }
+    # 옵션(stdio 로컬 개발): {"transport": "stdio",
+    #   "command": "<auditPaper_MCP>/.venv/bin/python",
+    #   "args": ["-m", "server.mcp_server"], "cwd": "<auditPaper_MCP>",
+    #   "env": {"QDRANT_URL": ..., "QDRANT_API_KEY": ...}}
+})
+tools = await client.get_tools()   # standards_* 3종이 LangChain 도구로 노출
+```
+
+- 전송 방식은 `.env`의 `MCP_TRANSPORT=http|stdio`로 선택, 기본 http —
+  백엔드가 HF Spaces에 배포되므로 배포·로컬 개발이 같은 경로를 씀.
+- HF Space 기동 직후 약 1분은 임베딩 모델 로드로 `standards_search`만 지연될 수 있음
+  (auditPaper_MCP 사용안내) — 첫 검색 타임아웃을 넉넉히 설정.
+- 도구 응답의 `collection` 필드·오류 4코드 봉투는 auditPaper_MCP 규약 그대로 통과 —
+  에이전트가 `hint`를 보고 다음 행동을 정한다.
+
+## 6. 조서 파일 전달 (MVP — 공개 데모)
+
+1. **가상 샘플 조서** 2~3건을 `data/workpapers/`에 미리 배치 (배포 이미지에 포함,
+   실데이터 미사용)
+2. 방문자는 대화에서 파일명으로 지칭하거나, 에이전트가 `list_workpapers()`로
+   목록을 제시
+3. UI 시작 문구(`chat-openers.yaml`)에 샘플 조서 안내를 넣어
+   방문자가 바로 데모를 시작할 수 있게 함
+
+방문자 xlsx 직접 업로드는 UI 포크의 허용 MIME 수정 + 서버 저장 경로 연결로 구현
+(백로그 최우선 — 공개 데모 가치가 큼).
+
+## 7. 상태·영속성
+
+- 대화 상태: LangGraph 서버 내장 체크포인터 (`langgraph dev` 기본 제공) —
+  스레드 단위 대화 이어가기는 UI가 자동 처리.
+- 조서 파일·해석 결과: 파일시스템 (`data/workpapers/`, 필요 시 `reports/`).
+- 별도 DB 없음 (MVP).
+
+## 8. 오류 처리
+
+| 상황 | 동작 |
+|---|---|
+| 존재하지 않는 파일 경로 | 도구가 후보 파일 목록과 함께 오류 텍스트 반환 → 에이전트가 되물음 |
+| 500셀 초과 범위 요청 | 도구가 분할 읽기 안내 반환 (예외 아님 — 에이전트 자가 수정 유도) |
+| MCP 서버 미기동/타임아웃 | `UPSTREAM_UNAVAILABLE` 봉투 → 기준 인용 없이 답하되 그 사실을 명시 |
+| 로컬 LLM 엔드포인트 다운 | 요청 실패를 UI에 표면화. 자동 폴백은 LiteLLM 도입 시 (백로그) |
