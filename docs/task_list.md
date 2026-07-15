@@ -14,10 +14,10 @@
 
 ## Phase 1 — 에이전트 뼈대 + 모델 라우팅
 
-- [ ] `src/agent/graph.py` — `create_agent` + `resolve_model()` (anthropic:/local: 분기)
-- [ ] `src/agent/prompts.py` — 시스템 프롬프트 초안
-- [ ] `langgraph.json` — graph 진입점 등록
-- [ ] 스모크 테스트 — 그래프 컴파일·더미 대화 1턴
+- [x] `src/agent/graph.py` — `create_agent` + `resolve_model()` (anthropic:/local: 분기)
+- [x] `src/agent/prompts.py` — 시스템 프롬프트 초안
+- [x] `langgraph.json` — graph 진입점 등록
+- [x] 스모크 테스트 — 그래프 컴파일·더미 대화 1턴 (4개 통과)
 
 **완료 기준**: `langgraph dev` 기동 → LangGraph Studio(또는 curl)로 대화 성공,
 `configurable.model` 변경 시 다른 모델로 응답.
