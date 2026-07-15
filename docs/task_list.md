@@ -50,15 +50,19 @@
 
 - [x] (선행) openpyxl phonetic 로드 버그 방어 패치 — 한공회 서식 실측으로 발견
 - [x] (선행) 테스트를 한공회 공식 조서 서식 기준으로 전환, 가상 샘플 삭제
-- [ ] read_range `mode="format"` (RED→GREEN) — 색상 3계열(rgb/theme/indexed) 분기,
-      프롬프트 탐색 원칙 1줄 추가
+- [x] (선행) 참조 구현 확보 — `docs/reference/xlsx_agent_tools.py`
+      (R1C1 변환기·이탈 휴리스틱·블록 감지 이식원, system_design 4.1)
+- [ ] read_range `mode="format"` (RED→GREEN) — 색상 3계열(rgb/theme/indexed) 분기
+      (theme 분기는 참조 구현에 없어 신규), 프롬프트 탐색 원칙 1줄 추가
 - [ ] `excel_get_annotations` 신설 — 메모·숨김·데이터 유효성·정의된 이름
-      (실파일에 없는 요소는 데모용 심은 파일로 보강)
-- [ ] `excel_formula_map` 신설 — R1C1 패턴 압축 + 하드코딩 검출.
-      ⚠️ 참조 구현(xlsx_agent_tools.py)은 실재하지 않음 — 신규 구현
-- [ ] overview 블록 감지로 교체 (빈 행 경계 분할) + 도구 간 ref 인계 확인
+      (실파일에 없는 요소는 심은 파일로 검증)
+- [ ] `excel_formula_map` 신설 — R1C1 패턴 압축 + 하드코딩 검출 (참조 구현 이식)
+- [ ] overview 강화 — 값/수식 밀도·시트간 참조·sheet_state + 블록 감지,
+      블록 ref → read_range 인계 확인
 - [ ] 잔손질: 워크북 LRU 캐시·마크다운 파이프 이스케이프·find formulas 모드·
       도구 출력 첫 줄 출처 규약
+- [ ] 프롬프트 정책 이식 — 수치 주장 셀 주소 인용·암산 금지(재조회 검산)·
+      절단 시 범위 축소
 
 **완료 기준**: "색으로 표시된 검토 항목"·"검토자 메모"·"이 시트의 검증 로직"
 3개 질문에 셀 주소 근거로 답변. 한공회 서식으로 엔드투엔드 확인.
@@ -104,6 +108,8 @@ README로 프로젝트 소개 완결 (PRD 성공 기준 5).
 - [ ] **(최우선)** UI 포크 수정 — xlsx 업로드 허용 + 서버 저장 경로 연결
       → 방문자가 자기 Excel로 데모 가능해짐
 - [ ] SpreadsheetLLM류 압축 인코딩 도구 (초대형 워크북)
+- [ ] `read_table`/`query` — DataFrame 등록 + pandas 표현식 계산 위임
+      (참조 구현 보유. eval이 공개 Space에서 임의 코드 실행이 되므로 격리 설계 필요)
 - [ ] LiteLLM 게이트웨이 — 상용↔로컬 자동 폴백, 사용량 통제
 - [ ] 로컬 모델 확정 (vLLM vs Ollama, 모델 선정 벤치마크)
 - [ ] 다중 사용자 인증·조서 접근 권한

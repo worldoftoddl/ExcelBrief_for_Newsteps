@@ -65,6 +65,26 @@ def make_graph(config):
 - 반환은 전부 텍스트(마크다운) — 모델 비의존적.
 - 타 언어 도구(예: SpreadsheetLLM 재구현체)는 같은 시그니처의 도구로 감싸 추가 (백로그).
 
+### 4.1 v2 확장 — 서식·의도 채널 (Phase 3.5)
+
+> 설계 배경: [Tool design direction.md](Tool%20design%20direction.md) ·
+> 참조 구현: [reference/xlsx_agent_tools.py](reference/xlsx_agent_tools.py)
+> (알고리즘 이식원 — 반환 포맷은 JSON 봉투 대신 현행 텍스트 유지, 7절 결정)
+
+| 변경 | 내용 | 참조 구현 관계 |
+|---|---|---|
+| `excel_workbook_overview` 강화 | 시트별 값/수식 셀 수·시트간 참조 수·`sheet_state`(숨김 시트 노출) + **빈 행 2행 경계 블록 감지** — 블록 ref는 `excel_read_range` 인수로 인계 | `workbook_overview`+`_detect_tables` 이식 |
+| `excel_read_range` `mode="format"` | 셀 값 뒤 압축 주석 `[B\|F:RRGGBB\|C:RRGGBB]`. 색상 3계열 분기 — theme는 `T{n}±{tint}` 표기 | 참조 구현은 rgb만 처리 — **theme/indexed 분기는 신규** (한공회 3650A 음영이 전부 theme 계열) |
+| `excel_get_annotations` 신설 | 셀 메모·숨김 행/열/시트·데이터 유효성·정의된 이름 | 참조 구현에 없음 — 신규 |
+| `excel_formula_map` 신설 | R1C1 정규화 패턴 압축 + 수식 지대 내 하드코딩 숫자 검출 (판정은 에이전트 몫) | `_to_r1c1`+이탈 휴리스틱 이식 |
+| `excel_find` `mode="formulas"` | 수식 문자열 검색 — 시트간 참조(`='1100'!…`) 추적 | 참조 구현 `find`는 수식 포함 검색 |
+| 잔손질 | 워크북 LRU 캐시(무상태 시그니처 유지) · 마크다운 파이프 이스케이프 · **모든 도구 출력 첫 줄 = 출처**(`시트!범위`) 규약 | `envelope.meta.source`의 텍스트판 |
+| 프롬프트 정책 이식 | 수치 주장에 셀 주소 인용 강제 · 합계/증감 암산 금지(원본 셀 재조회 검산) · 절단 안내 시 범위 축소 재호출 | `POLICY_PROMPT` 요지 반영 |
+
+**보류 (백로그)**: 참조 구현의 `read_table`(DataFrame 등록)·`query`(pandas eval) —
+계산 위임 가치는 크나 eval은 공개 Space에서 임의 코드 실행 경로가 되므로
+격리 방안(subprocess/RestrictedPython)과 함께 재검토.
+
 ## 5. MCP 연결
 
 ```python
