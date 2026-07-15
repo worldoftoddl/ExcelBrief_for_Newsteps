@@ -12,6 +12,7 @@ from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnableConfig
 
+from agent.mcp_client import get_standards_tools
 from agent.prompts import SYSTEM_PROMPT
 
 load_dotenv()
@@ -30,11 +31,12 @@ def resolve_model(spec: str):
     return init_chat_model(spec)
 
 
-def graph(config: RunnableConfig):
+async def graph(config: RunnableConfig):
     """요청 config를 받아 에이전트를 조립하는 팩토리 (langgraph 서버가 호출)."""
     model_spec = (config.get("configurable") or {}).get("model", DEFAULT_MODEL)
+    tools = list(await get_standards_tools())  # Phase 3: excel_* 도구 추가 예정
     return create_agent(
         model=resolve_model(model_spec),
-        tools=[],  # Phase 2: standards_* (MCP) / Phase 3: excel_* 도구 연결
+        tools=tools,
         system_prompt=SYSTEM_PROMPT,
     )

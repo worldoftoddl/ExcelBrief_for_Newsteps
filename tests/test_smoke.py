@@ -7,8 +7,8 @@ import pytest
 from agent.graph import DEFAULT_MODEL, graph, resolve_model
 
 
-def test_graph_compiles():
-    g = graph({"configurable": {}})
+async def test_graph_compiles():
+    g = await graph({"configurable": {}})
     assert hasattr(g, "invoke") and hasattr(g, "stream")
 
 
@@ -28,9 +28,9 @@ def test_resolve_model_local_routes_to_openai_compatible():
 
 
 @pytest.mark.skipif(not os.environ.get("ANTHROPIC_API_KEY"), reason="API 키 없음")
-def test_dummy_turn():
-    g = graph({"configurable": {}})
-    result = g.invoke(
+async def test_dummy_turn():
+    g = await graph({"configurable": {}})
+    result = await g.ainvoke(
         {"messages": [{"role": "user", "content": "한 문장으로 자기소개해줘"}]}
     )
     assert result["messages"][-1].content

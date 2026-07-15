@@ -24,11 +24,11 @@
 
 ## Phase 2 — auditPaper_MCP 연결
 
-- [ ] `src/agent/mcp_client.py` — `MultiServerMCPClient` HTTP 배선
+- [x] `src/agent/mcp_client.py` — `MultiServerMCPClient` HTTP 배선
       (HF Space 원격 기본, stdio 로컬 옵션 포함)
-- [ ] 에이전트에 `standards_*` 3종 도구 노출
-- [ ] 시스템 프롬프트에 인용 규칙(cid 병기) 추가
-- [ ] 통합 테스트 — "수익 인식 5단계 근거 문단은?" → cid 포함 답변 확인
+- [x] 에이전트에 `standards_*` 3종 도구 노출
+- [x] 시스템 프롬프트에 인용 규칙(cid 병기·도구 사용 순서·오류 봉투 대응) 추가
+- [x] 통합 테스트 — "수익 인식 5단계 근거 문단은?" → cid 포함 답변 확인 (7개 통과)
 
 **완료 기준**: 기준서 질문에 `KIFRS::1115::31`류 cid 인용이 포함된 답변.
 
