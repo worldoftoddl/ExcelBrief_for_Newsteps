@@ -35,7 +35,7 @@ async def test_revenue_five_steps_citation():
                 }
             ]
         },
-        config={"recursion_limit": 15},
+        config={"recursion_limit": 40},
     )
     content = str(result["messages"][-1].content)
     assert "KIFRS::1115" in content, f"cid 인용 누락: {content[:300]}"

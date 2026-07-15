@@ -34,11 +34,12 @@
 
 ## Phase 3 — Excel 탐색 도구 (TDD)
 
-- [ ] `tests/fixtures/` — 조서 모사 xlsx + 범용 xlsx 픽스처 제작
-- [ ] `tests/test_excel_tools.py` — 도구 4종 + `list_workpapers` 테스트 먼저 작성 (RED)
-- [ ] `src/agent/tools/excel.py` — 구현 (GREEN): overview / read_range(값·수식,
+- [x] 픽스처 — `tests/conftest.py`에서 조서 모사·범용 xlsx를 임시 폴더에 생성
+      (바이너리 커밋 대신 코드 생성 방식)
+- [x] `tests/test_excel_tools.py` — 도구 4종 + `list_workpapers` 테스트 먼저 작성 (RED)
+- [x] `src/agent/tools/excel.py` — 구현 (GREEN): overview / read_range(값·수식,
       500셀 상한) / find / sheet_stats / list_workpapers, 경로 탈출 차단
-- [ ] 에이전트에 도구 연결 + 탐색 순서 프롬프트 반영
+- [x] 에이전트에 도구 연결 + 탐색 순서 프롬프트 반영 (통합 테스트로 개요 선행 확인)
 
 **완료 기준**: pytest 전체 통과, 에이전트가 샘플 xlsx를 개요→정독 순서로 읽고 설명.
 

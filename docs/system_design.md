@@ -57,7 +57,7 @@ def make_graph(config):
 | 도구 | 입력 | 출력 |
 |---|---|---|
 | `excel_workbook_overview` | `path` | 시트별 {이름, 행×열 크기, 첫 행(헤더) 미리보기, 병합 셀 수}. 워크북 전체 지도 |
-| `excel_read_range` | `path, sheet, range, mode=values\|formulas` | 범위 셀 값(또는 수식)을 마크다운 표로. 상한: 1회 500셀 — 초과 시 분할 안내 반환 |
+| `excel_read_range` | `path, sheet, cell_range, mode=values\|formulas` | 범위 셀 값(또는 수식)을 마크다운 표로. 상한: 1회 500셀 — 초과 시 분할 안내 반환 |
 | `excel_find` | `path, query, sheet?` | 문자열 매칭 셀 좌표 목록 (계정명·틱마크 탐색용) |
 | `excel_sheet_stats` | `path, sheet` | 데이터 밀도, 수식 셀 비율, 숫자/문자 분포 — 정독 우선순위 판단용 |
 
