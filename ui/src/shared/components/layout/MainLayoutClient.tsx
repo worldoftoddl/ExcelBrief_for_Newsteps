@@ -246,7 +246,7 @@ function MainLayoutContent({ children, assistantId }: MainLayoutContentProps) {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <a
-                    href="https://github.com/teddynote-lab/langgraph-chat-ui"
+                    href="https://github.com/worldoftoddl/ExcelBrief_for_Newsteps"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:bg-accent focus-visible:ring-ring flex h-10 w-10 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"

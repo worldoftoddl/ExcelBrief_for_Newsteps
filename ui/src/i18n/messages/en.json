@@ -392,9 +392,9 @@
     "languageDesc": "Select your preferred language"
   },
   "defaults": {
-    "welcomeMessage": "Ask your LangGraph agent anything.",
-    "chatInputPlaceholder": "Ask me anything.",
-    "metaDescription": "Chat with your AI assistant"
+    "welcomeMessage": "신입 회계사를 위한 감사조서(Excel) 해설 에이전트 — 조서를 읽고, 수행된 절차를 감사기준·K-IFRS 근거와 함께 설명합니다.",
+    "chatInputPlaceholder": "조서나 감사기준에 대해 물어보세요. (예: 3650 조서는 어떤 절차를 위한 서식이야?)",
+    "metaDescription": "신입 회계사를 위한 감사조서(Excel) 해설 AI 에이전트"
   },
   "history": {
     "newChat": "New Chat",

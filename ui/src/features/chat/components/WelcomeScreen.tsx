@@ -1,17 +1,71 @@
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { LoaderCircle } from "lucide-react";
+import { BookOpen, LoaderCircle } from "lucide-react";
 import type { ChatConfig } from "@/lib/config/client";
+import { CHAT_STARTERS } from "@/configs/site";
+import { MarkdownText } from "./content/MarkdownText";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/shared/components/ui/dialog";
 
 interface WelcomeScreenProps {
   config: ChatConfig;
   chatWidth: "default" | "wide";
   isSchemaLoading: boolean;
+  /** 예시 질문 클릭 시 입력창을 채운다 */
+  onStarterClick?: (text: string) => void;
+}
+
+/** /full-description.md를 다이얼로그로 보여주는 사용 안내 버튼 */
+function GuideDialog() {
+  const [open, setOpen] = useState(false);
+  const [markdown, setMarkdown] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || markdown !== null) return;
+    fetch("/full-description.md")
+      .then((res) => (res.ok ? res.text() : Promise.reject(res.status)))
+      .then(setMarkdown)
+      .catch(() => setMarkdown("안내 문서를 불러오지 못했습니다."));
+  }, [open, markdown]);
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm underline-offset-4 hover:underline"
+        >
+          <BookOpen className="h-4 w-4" />
+          사용 안내 · 준비된 조서 보기
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>사용 안내</DialogTitle>
+        </DialogHeader>
+        {markdown === null ? (
+          <LoaderCircle className="text-muted-foreground mx-auto h-6 w-6 animate-spin" />
+        ) : (
+          <MarkdownText>{markdown}</MarkdownText>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export function WelcomeScreen({
   config,
   chatWidth,
   isSchemaLoading,
+  onStarterClick,
 }: WelcomeScreenProps) {
   return (
     <div
@@ -39,7 +93,25 @@ export function WelcomeScreen({
             {config.branding.description}
           </p>
         )}
+        <GuideDialog />
       </div>
+
+      {onStarterClick && (
+        <div className="flex flex-wrap justify-center gap-2 px-4">
+          {CHAT_STARTERS.map((starter) => (
+            <button
+              key={starter}
+              type="button"
+              onClick={() => onStarterClick(starter)}
+              className="border-border bg-card text-foreground/80 hover:bg-accent hover:text-foreground max-w-full truncate rounded-full border px-3.5 py-1.5 text-sm shadow-sm transition-colors"
+              title={starter}
+            >
+              {starter}
+            </button>
+          ))}
+        </div>
+      )}
+
       {isSchemaLoading && (
         <LoaderCircle className="text-muted-foreground h-6 w-6 animate-spin" />
       )}

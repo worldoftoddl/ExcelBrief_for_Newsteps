@@ -344,6 +344,7 @@ export function ThreadContent() {
                       config={config}
                       chatWidth={userSettings.chatWidth}
                       isSchemaLoading={schemaUI.isLoading}
+                      onStarterClick={setInput}
                     />
                   )}
 
