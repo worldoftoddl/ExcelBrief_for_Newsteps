@@ -23,8 +23,8 @@ flowchart LR
     subgraph Space["HF Space (단일 컨테이너)"]
         UI["Next.js 채팅 UI<br/>:7860 (agent-chat-ui)"]
         LG["langgraph 서버 :2024<br/>ReAct 에이전트 (create_agent)"]
-        XL["Excel 도구 7종<br/>overview·read_range·formula_map·<br/>annotations·find·stats·list"]
-        UI -- "/api passthrough" --> LG
+        XL["문서 도구 8종<br/>overview·read_range·formula_map·<br/>annotations·find·stats·list·read_document"]
+        UI -- "/api passthrough<br/>/api/upload (파일 업로드)" --> LG
         LG --> XL
     end
     BR["브라우저"] --> UI
@@ -60,7 +60,8 @@ flowchart LR
 | 에이전트 | Python 3.12, LangChain `create_agent`(ReAct), LangGraph 서버 |
 | LLM | Claude (프롬프트 캐싱, 실측 87% 캐시 히트) · 로컬 모델 라우트 |
 | 기준서 RAG | FastMCP HTTP 서버([auditPaper_MCP](https://github.com/worldoftoddl/auditPaper_MCP)) + Qdrant + bge-m3 |
-| Excel 파싱 | openpyxl — 값·수식·서식·메모·숨김·유효성 전 계층 판독 |
+| 문서 파싱 | openpyxl(xlsx/xlsm)·xlrd(구형 xls)·python-docx(docx) — 값·수식·서식·메모·숨김·유효성 전 계층 판독 |
+| 파일 업로드 | Next.js `/api/upload` → 조서 폴더 저장, 채팅 첨부로 즉시 분석 (xlsx·xlsm·xls·docx, 20MB) |
 | UI | Next.js 15 ([agent-chat-ui](https://github.com/braincrew-lab/agent-chat-ui) 벤더링) |
 | 관측 | LangSmith 트레이싱 |
 | 배포 | HuggingFace Spaces (Docker 단일 컨테이너) |

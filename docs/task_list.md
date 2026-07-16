@@ -222,8 +222,23 @@ README로 프로젝트 소개 완결 (PRD 성공 기준 5).
 
 ## 백로그 (MVP 이후)
 
-- [ ] **(최우선)** UI 포크 수정 — xlsx 업로드 허용 + 서버 저장 경로 연결
-      → 방문자가 자기 Excel로 데모 가능해짐
+- [x] **(최우선)** UI 포크 수정 — 문서 업로드 허용 + 서버 저장 경로 연결 (2026-07-16)
+      → 방문자가 자기 Excel/Word로 데모 가능해짐
+    - 지원 형식: xlsx·xlsm·xls·docx (사용자 요청으로 xls·docx까지 확대)
+    - 백엔드: `.xls`는 xlrd→openpyxl 변환으로 기존 excel_* 도구가 투명하게 동작
+      (수식·서식·메모 없음 — 도구가 안내 문구 반환), `.docx`는 `read_document`
+      신규 도구(python-docx, 문단·표→마크다운, 20k자 상한)
+    - 업로드 경로: Next.js `/api/upload`(nodejs 런타임, 정적 라우트라 catch-all
+      프록시보다 우선) → `WORKPAPERS_DIR` 저장. 파일명 새니타이즈, 기존 파일과
+      충돌 시 " (1)" 접미사(데모 조서 덮어쓰기 방지), 20MB 상한, 확장자 화이트리스트
+    - 프런트: 문서 파일은 base64 인라인 대신 선택 즉시 업로드 → 입력창 위 칩 표시,
+      전송 시 `[첨부 파일: 저장파일명]` 텍스트를 메시지에 덧붙임(시스템 프롬프트가
+      이 표기를 도구 path로 쓰도록 안내). 업로드 중 전송 버튼 비활성
+    - 검증: pytest 56건 통과(신규 test_document_tools.py 7건 포함), tsc·eslint
+      깨끗, next build 성공, curl 업로드 4케이스, 실제 에이전트 대화에서
+      첨부 docx를 read_document로 읽어 답변 확인
+    - 유의: HF Space 파일시스템은 휘발성 — 업로드 파일은 Space 재시작 시 사라짐
+      (데모 용도로 허용)
 - [ ] SpreadsheetLLM류 압축 인코딩 도구 (초대형 워크북)
 - [ ] `read_table`/`query` — DataFrame 등록 + pandas 표현식 계산 위임
       (참조 구현 보유. eval이 공개 Space에서 임의 코드 실행이 되므로 격리 설계 필요)

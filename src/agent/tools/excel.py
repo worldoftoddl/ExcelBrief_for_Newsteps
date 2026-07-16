@@ -16,8 +16,9 @@ from functools import lru_cache
 from pathlib import Path
 
 import openpyxl.worksheet.dimensions as _dims
+import xlrd
 from langchain_core.tools import tool
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.utils.cell import range_boundaries
 
@@ -43,8 +44,16 @@ MAX_PATTERNS_SHOWN = 20
 MAX_DEVIANTS_SHOWN = 30
 
 
+SUPPORTED_PATTERNS = ("*.xlsx", "*.xlsm", "*.xls", "*.docx")
+
+
 def _base_dir() -> Path:
     return Path(os.environ.get("WORKPAPERS_DIR", "data/workpapers")).resolve()
+
+
+def _supported_files(base: Path) -> list[Path]:
+    files = {p for pat in SUPPORTED_PATTERNS for p in base.glob(pat)}
+    return sorted(files, key=lambda p: p.name)
 
 
 def _resolve(path: str) -> Path:
@@ -54,7 +63,7 @@ def _resolve(path: str) -> Path:
     if not target.is_relative_to(base):
         raise ValueError(f"오류: 조서 폴더({base.name}/) 밖의 경로는 접근할 수 없습니다.")
     if not target.is_file():
-        candidates = sorted(p.name for p in base.glob("*.xls[xm]"))
+        candidates = [p.name for p in _supported_files(base)]
         listing = "\n".join(f"- {c}" for c in candidates) or "(폴더가 비어 있음)"
         raise ValueError(
             f"오류: '{path}' 파일이 없습니다. 현재 폴더의 파일 목록:\n{listing}"
@@ -62,8 +71,45 @@ def _resolve(path: str) -> Path:
     return target
 
 
+def _load_xls(path_str: str):
+    """구형 .xls(BIFF)를 xlrd로 읽어 값 전용 openpyxl 워크북으로 변환한다.
+
+    .xls 리더는 수식·서식·메모를 제공하지 않으므로 값·병합·숨김 시트만 옮긴다.
+    """
+    # formatting_info=True여야 merged_cells가 채워진다 (xlrd 2.x, .xls 전용)
+    book = xlrd.open_workbook(path_str, formatting_info=True)
+    wb = Workbook()
+    wb.remove(wb.active)
+    for sh in book.sheets():
+        ws = wb.create_sheet(title=sh.name[:31])
+        if sh.visibility != 0:
+            ws.sheet_state = "hidden"
+        for r in range(sh.nrows):
+            for col in range(sh.ncols):
+                cell = sh.cell(r, col)
+                if cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK):
+                    continue
+                v = cell.value
+                if cell.ctype == xlrd.XL_CELL_DATE:
+                    v = xlrd.xldate.xldate_as_datetime(v, book.datemode)
+                elif cell.ctype == xlrd.XL_CELL_BOOLEAN:
+                    v = bool(v)
+                elif cell.ctype == xlrd.XL_CELL_ERROR:
+                    v = xlrd.error_text_from_code.get(v, "#ERR")
+                elif isinstance(v, float) and v.is_integer():
+                    v = int(v)
+                ws.cell(row=r + 1, column=col + 1, value=v)
+        for rlo, rhi, clo, chi in sh.merged_cells:  # rhi·chi는 배타 경계
+            ws.merge_cells(
+                start_row=rlo + 1, end_row=rhi, start_column=clo + 1, end_column=chi
+            )
+    return wb
+
+
 @lru_cache(maxsize=8)
 def _load_cached(path_str: str, mtime: float, data_only: bool):
+    if path_str.lower().endswith(".xls"):
+        return _load_xls(path_str)
     return load_workbook(path_str, read_only=False, data_only=data_only)
 
 
@@ -175,14 +221,15 @@ def _detect_blocks(ws) -> list[dict]:
 
 @tool
 def list_workpapers() -> str:
-    """조서 폴더에 있는 Excel 파일 목록을 반환한다.
+    """조서 폴더에 있는 파일 목록을 반환한다 (Excel: xlsx/xlsm/xls, Word: docx).
 
-    파일명이 기억나지 않거나 사용자가 파일을 모호하게 지칭할 때 먼저 호출한다.
+    파일명이 기억나지 않거나 사용자가 파일을 모호하게 지칭할 때,
+    또는 사용자가 방금 업로드한 파일을 찾을 때 먼저 호출한다.
     """
     base = _base_dir()
-    files = sorted(base.glob("*.xls[xm]"))
+    files = _supported_files(base)
     if not files:
-        return f"조서 폴더({base})에 Excel 파일이 없습니다."
+        return f"조서 폴더({base})에 지원되는 파일(xlsx/xlsm/xls/docx)이 없습니다."
     return f"조서 폴더 파일 목록:\n" + "\n".join(
         f"- {p.name} ({p.stat().st_size // 1024:,} KB)" for p in files
     )
@@ -292,6 +339,8 @@ def excel_read_range(path: str, sheet: str, cell_range: str, mode: str = "values
         "formulas": " (수식 문자열)",
         "format": " (값 [B=볼드|F=배경색|C=글자색; T=테마색, I=인덱스색])",
     }.get(mode, " (저장된 값 — 수식 재계산 아님)")
+    if target.suffix.lower() == ".xls":
+        note = " (.xls 구형 형식 — 수식·서식은 읽을 수 없어 저장된 값만 표시)"
     return f"{sheet}!{cell_range}{note}\n" + "\n".join(rows)
 
 
@@ -401,6 +450,12 @@ def excel_formula_map(path: str, sheet: str) -> str:
         ws = _sheet(_load(target, data_only=False), sheet)
     except ValueError as e:
         return str(e)
+
+    if target.suffix.lower() == ".xls":
+        return (
+            f"수식 지도: {sheet} — .xls 구형 형식은 수식을 제공하지 않습니다. "
+            f"값 확인은 excel_read_range를 사용하세요."
+        )
 
     patterns: dict[str, list[str]] = defaultdict(list)
     frows, fcols = set(), set()

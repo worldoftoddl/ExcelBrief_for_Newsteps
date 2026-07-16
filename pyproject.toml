@@ -11,13 +11,16 @@ dependencies = [
     "langchain-openai",
     "langchain-mcp-adapters",
     "openpyxl",
+    "python-docx",
     "python-dotenv",
+    "xlrd",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-asyncio",
+    "xlwt",
 ]
 
 [build-system]
