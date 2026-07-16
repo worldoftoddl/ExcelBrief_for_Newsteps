@@ -1,6 +1,12 @@
 import { useState, useRef, useEffect, ChangeEvent } from "react";
 import type { Base64ContentBlock } from "@langchain/core/messages";
-import { processFiles } from "@/lib/utils/file-validation";
+import { toast } from "sonner";
+import {
+  isDocumentFile,
+  processFiles,
+  uploadDocument,
+  type UploadedDocument,
+} from "@/lib/utils/file-validation";
 
 interface UseFileUploadOptions {
   initialBlocks?: Base64ContentBlock[];
@@ -11,20 +17,55 @@ export function useFileUpload({
 }: UseFileUploadOptions = {}) {
   const [contentBlocks, setContentBlocks] =
     useState<Base64ContentBlock[]>(initialBlocks);
+  const [uploadedDocs, setUploadedDocs] = useState<UploadedDocument[]>([]);
+  const [pendingDocCount, setPendingDocCount] = useState(0);
   const dropRef = useRef<HTMLDivElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const dragCounter = useRef(0);
+
+  /**
+   * Excel/Word 문서는 서버 조서 폴더에 업로드하고 칩으로만 표시한다.
+   * 나머지(이미지·PDF)는 기존대로 base64 콘텐츠 블록으로 인라인한다.
+   */
+  const ingestFiles = async (files: File[], isPaste: boolean) => {
+    const docs = files.filter(isDocumentFile);
+    const rest = files.filter((f) => !isDocumentFile(f));
+
+    for (const doc of docs) {
+      if (uploadedDocs.some((d) => d.filename === doc.name)) {
+        toast.error(`중복 파일: ${doc.name} — 이미 첨부되어 있습니다.`);
+        continue;
+      }
+      setPendingDocCount((n) => n + 1);
+      try {
+        const uploaded = await uploadDocument(doc);
+        setUploadedDocs((prev) =>
+          prev.some((d) => d.filename === uploaded.filename)
+            ? prev
+            : [...prev, uploaded],
+        );
+      } catch (error: unknown) {
+        toast.error(
+          error instanceof Error ? error.message : "업로드에 실패했습니다.",
+        );
+      } finally {
+        setPendingDocCount((n) => n - 1);
+      }
+    }
+
+    if (rest.length > 0) {
+      const newBlocks = await processFiles(rest, contentBlocks, isPaste);
+      if (newBlocks.length > 0) {
+        setContentBlocks((prev) => [...prev, ...newBlocks]);
+      }
+    }
+  };
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
-    const fileArray = Array.from(files);
-    const newBlocks = await processFiles(fileArray, contentBlocks, false);
-
-    if (newBlocks.length > 0) {
-      setContentBlocks((prev) => [...prev, ...newBlocks]);
-    }
+    await ingestFiles(Array.from(files), false);
 
     e.target.value = "";
   };
@@ -57,12 +98,7 @@ export function useFileUpload({
 
       if (!e.dataTransfer) return;
 
-      const files = Array.from(e.dataTransfer.files);
-      const newBlocks = await processFiles(files, contentBlocks, false);
-
-      if (newBlocks.length > 0) {
-        setContentBlocks((prev) => [...prev, ...newBlocks]);
-      }
+      await ingestFiles(Array.from(e.dataTransfer.files), false);
     };
     const handleWindowDragEnd = (e: DragEvent) => {
       dragCounter.current = 0;
@@ -112,7 +148,9 @@ export function useFileUpload({
       window.removeEventListener("dragover", handleWindowDragOver);
       dragCounter.current = 0;
     };
-  }, [contentBlocks]);
+    // ingestFiles가 contentBlocks·uploadedDocs를 클로저로 잡으므로 둘 다 의존성에 포함
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contentBlocks, uploadedDocs]);
 
   const removeBlock = (idx: number) => {
     setContentBlocks((prev) => prev.filter((_, i) => i !== idx));
@@ -145,12 +183,14 @@ export function useFileUpload({
 
     e.preventDefault();
 
-    const newBlocks = await processFiles(files, contentBlocks, true);
-
-    if (newBlocks.length > 0) {
-      setContentBlocks((prev) => [...prev, ...newBlocks]);
-    }
+    await ingestFiles(files, true);
   };
+
+  const removeDoc = (idx: number) => {
+    setUploadedDocs((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const resetDocs = () => setUploadedDocs([]);
 
   return {
     contentBlocks,
@@ -161,5 +201,9 @@ export function useFileUpload({
     resetBlocks,
     dragOver,
     handlePaste,
+    uploadedDocs,
+    removeDoc,
+    resetDocs,
+    docsUploading: pendingDocCount > 0,
   };
 }

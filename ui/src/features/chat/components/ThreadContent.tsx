@@ -71,6 +71,10 @@ export function ThreadContent() {
     removeBlock,
     dragOver,
     handlePaste,
+    uploadedDocs,
+    removeDoc,
+    resetDocs,
+    docsUploading,
   } = useFileUpload();
   const isLargeScreen = useMediaQuery("(min-width: 1024px)");
 
@@ -134,6 +138,8 @@ export function ThreadContent() {
     setInput,
     contentBlocks,
     setContentBlocks,
+    uploadedDocs,
+    resetDocs,
     getSubmitPayload,
     getDisplayPayload,
     resetForm,
@@ -360,6 +366,9 @@ export function ThreadContent() {
                       onChatSubmit={handleSubmit}
                       contentBlocks={contentBlocks}
                       onRemoveBlock={removeBlock}
+                      uploadedDocs={uploadedDocs}
+                      onRemoveDoc={removeDoc}
+                      docsUploading={docsUploading}
                       onFileUpload={handleFileUpload}
                       onPaste={handlePaste}
                       dropRef={dropRef}

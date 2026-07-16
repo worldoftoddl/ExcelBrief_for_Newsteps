@@ -35,6 +35,7 @@ import { ContentBlocksPreview } from "../content/ContentBlocksPreview";
 import type { UseSchemaUIReturn } from "@/features/chat/hooks/useSchemaUI";
 import type { Assistant } from "@/app/actions/assistant";
 import type { ModelOption } from "@/lib/models";
+import type { UploadedDocument } from "@/lib/utils/file-validation";
 import type { Base64ContentBlock } from "@langchain/core/messages";
 import { UI } from "@/lib/constants";
 
@@ -51,6 +52,9 @@ interface UnifiedInputAreaProps {
   onChatSubmit: (e: FormEvent) => void;
   contentBlocks: Base64ContentBlock[];
   onRemoveBlock: (idx: number) => void;
+  uploadedDocs?: UploadedDocument[];
+  onRemoveDoc?: (idx: number) => void;
+  docsUploading?: boolean;
   onFileUpload: (e: ChangeEvent<HTMLInputElement>) => void;
   onPaste: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
   dropRef: RefObject<HTMLDivElement | null>;
@@ -98,6 +102,9 @@ export function UnifiedInputArea({
   onChatSubmit,
   contentBlocks,
   onRemoveBlock,
+  uploadedDocs = [],
+  onRemoveDoc,
+  docsUploading = false,
   onFileUpload,
   onPaste,
   dropRef,
@@ -351,6 +358,8 @@ export function UnifiedInputArea({
                 <ContentBlocksPreview
                   blocks={contentBlocks}
                   onRemove={onRemoveBlock}
+                  docs={uploadedDocs}
+                  onRemoveDoc={onRemoveDoc}
                 />
 
                 <textarea
@@ -381,7 +390,10 @@ export function UnifiedInputArea({
                   isLoading={isLoading}
                   disabled={
                     isLoading ||
-                    (!input.trim() && contentBlocks.length === 0) ||
+                    docsUploading ||
+                    (!input.trim() &&
+                      contentBlocks.length === 0 &&
+                      uploadedDocs.length === 0) ||
                     !isAssistantSelected ||
                     !requiredFieldsValid
                   }

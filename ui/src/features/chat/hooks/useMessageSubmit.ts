@@ -13,6 +13,7 @@ import { STREAM_OPTIONS } from "@/lib/constants";
 import { modelRunConfig } from "@/lib/models";
 import { ensureToolCallsHaveResponses } from "@/lib/utils/ensure-tool-responses";
 import { extractDisplayName } from "@/lib/utils/file-upload";
+import type { UploadedDocument } from "@/lib/utils/file-validation";
 import { toast } from "sonner";
 import type { StreamContextType } from "@/providers/Stream";
 import type {
@@ -28,6 +29,9 @@ interface UseMessageSubmitOptions {
   setInput: (value: string) => void;
   contentBlocks: Base64ContentBlock[];
   setContentBlocks: (blocks: Base64ContentBlock[]) => void;
+  /** 조서 폴더에 업로드된 Excel/Word 문서 — 메시지에 [첨부 파일: …]로 표기 */
+  uploadedDocs?: UploadedDocument[];
+  resetDocs?: () => void;
   getSubmitPayload: () => FormState;
   getDisplayPayload: () => FormState;
   resetForm: () => void;
@@ -119,6 +123,8 @@ export function useMessageSubmit(options: UseMessageSubmitOptions) {
     setInput,
     contentBlocks,
     setContentBlocks,
+    uploadedDocs = [],
+    resetDocs,
     getSubmitPayload,
     getDisplayPayload,
     resetForm,
@@ -154,7 +160,9 @@ export function useMessageSubmit(options: UseMessageSubmitOptions) {
         return;
       }
       if (
-        (input.trim().length === 0 && contentBlocks.length === 0) ||
+        (input.trim().length === 0 &&
+          contentBlocks.length === 0 &&
+          uploadedDocs.length === 0) ||
         isLoading
       ) {
         return;
@@ -166,7 +174,12 @@ export function useMessageSubmit(options: UseMessageSubmitOptions) {
       stream.clearNodeUpdates();
 
       // Capture values before clearing
-      const currentInput = input;
+      // 업로드 문서는 시스템 프롬프트 규약대로 [첨부 파일: 저장파일명] 표기로
+      // 전달한다 — 에이전트가 이 이름을 도구 path로 사용한다.
+      const docNote = uploadedDocs
+        .map((d) => `[첨부 파일: ${d.savedAs}]`)
+        .join("\n");
+      const currentInput = [docNote, input.trim()].filter(Boolean).join("\n\n");
       const currentBlocks = [...contentBlocks];
 
       // Store form submission if schema has file fields with values
@@ -198,6 +211,7 @@ export function useMessageSubmit(options: UseMessageSubmitOptions) {
       // Clear form immediately
       setInput("");
       setContentBlocks([]);
+      resetDocs?.();
       resetForm();
 
       if (parsedSchema.hasMessages) {
@@ -241,6 +255,8 @@ export function useMessageSubmit(options: UseMessageSubmitOptions) {
       isAssistantSelected,
       input,
       contentBlocks,
+      uploadedDocs,
+      resetDocs,
       isLoading,
       stream,
       setInput,
