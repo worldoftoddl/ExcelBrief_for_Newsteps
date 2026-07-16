@@ -22,12 +22,17 @@ COPY ui/ ./
 # NEXT_PUBLIC_* 는 빌드타임에 번들로 인라인된다. 클라이언트는 항상
 # window.location.origin + /api 로 호출(normalizeApiUrl)하므로 도메인 무관.
 # AUTH_MODE=standalone: 인증·DB 없이 단일 사용자 모드.
+# SECURITY_HEADER_*: 보안 헤더도 빌드 시 routes-manifest에 구워진다 —
+# 기본값(X-Frame-Options: DENY, frame-ancestors 'none')은 HF Space의
+# iframe 렌더를 차단하므로(실측: "연결을 거부했습니다") HF만 허용한다.
 ENV NEXT_PUBLIC_API_URL=/api \
     NEXT_PUBLIC_ASSISTANT_ID=agent \
     AUTH_MODE=standalone \
     NEXT_PUBLIC_AUTH_MODE=standalone \
     NEXT_PUBLIC_DEFAULT_LOCALE=ko \
-    DATABASE_PROVIDER=sqlite
+    DATABASE_PROVIDER=sqlite \
+    SECURITY_HEADER_X_FRAME_OPTIONS="" \
+    SECURITY_HEADER_CSP="frame-ancestors 'self' https://huggingface.co"
 # build 스크립트가 prisma generate → next build 순으로 실행
 RUN pnpm build
 
