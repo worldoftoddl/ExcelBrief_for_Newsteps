@@ -1,0 +1,21 @@
+# 시크릿 — 이미지에 절대 포함 금지 (Space 시크릿이 환경변수로 주입)
+.env
+ui/.env
+
+# 로컬 산출물·캐시
+.venv/
+.git/
+.langgraph_api/
+.pytest_cache/
+__pycache__/
+*.egg-info/
+ui/node_modules/
+ui/.next/
+ui/tsconfig.tsbuildinfo
+
+# 이미지에 불필요한 리포 자료
+docs/
+reports/
+tests/
+scripts/
+skills-lock.json
