@@ -10,14 +10,25 @@
 # ── Stage 1: UI 빌드 ─────────────────────────────────────────────────────
 FROM node:24-slim AS ui-builder
 WORKDIR /build/ui
-RUN corepack enable
+# openssl: prisma generate가 엔진 검증에 사용 (standalone 모드여도 빌드에는 필요)
+RUN corepack enable \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 COPY ui/package.json ui/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+# postinstall(prisma generate)은 아직 없는 scripts/·prisma/를 참조하므로 건너뛴다
+RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY ui/ ./
-# NEXT_PUBLIC_* 는 빌드타임에 번들로 인라인된다. /api 는 상대 경로 —
-# normalizeApiUrl이 window.location.origin과 결합하므로 어떤 도메인에서든 동작.
+# NEXT_PUBLIC_* 는 빌드타임에 번들로 인라인된다. 클라이언트는 항상
+# window.location.origin + /api 로 호출(normalizeApiUrl)하므로 도메인 무관.
+# AUTH_MODE=standalone: 인증·DB 없이 단일 사용자 모드.
 ENV NEXT_PUBLIC_API_URL=/api \
-    NEXT_PUBLIC_ASSISTANT_ID=agent
+    NEXT_PUBLIC_ASSISTANT_ID=agent \
+    AUTH_MODE=standalone \
+    NEXT_PUBLIC_AUTH_MODE=standalone \
+    NEXT_PUBLIC_DEFAULT_LOCALE=ko \
+    DATABASE_PROVIDER=sqlite
+# build 스크립트가 prisma generate → next build 순으로 실행
 RUN pnpm build
 
 # ── Stage 2: 런타임 (Python + Node) ──────────────────────────────────────
@@ -53,6 +64,9 @@ ENV WORKPAPERS_DIR=/home/user/app/data/workpapers \
     MCP_HTTP_URL=https://toddl-auditpaper-mcp.hf.space/mcp \
     LANGSMITH_PROJECT=excelbrief \
     LANGGRAPH_API_URL=http://127.0.0.1:2024 \
+    AUTH_MODE=standalone \
+    NEXT_PUBLIC_AUTH_MODE=standalone \
+    NEXT_PUBLIC_DEFAULT_LOCALE=ko \
     PORT=7860 \
     HOSTNAME=0.0.0.0
 
