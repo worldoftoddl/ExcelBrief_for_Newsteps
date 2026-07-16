@@ -103,11 +103,13 @@
 **완료 기준**: 브라우저에서 조서 해석 대화가 처음부터 끝까지 동작.
 → 서버측 전 구간 검증 완료, 브라우저 육안 확인만 남음 (사용자 확인 대기)
 
-> **WSL2 주의**: Windows 브라우저에서 접속하려면 langgraph dev를 반드시
-> `--host 0.0.0.0`으로 기동해야 한다 (`​.venv/bin/python -m langgraph_cli dev
-> --no-browser --host 0.0.0.0`). 기본 127.0.0.1 바인딩은 WSL2 localhost
-> 포워딩이 중계하지 않아 UI가 "Failed to connect to LangGraph server"를 띄운다.
-> Next(:3000)는 기본이 와일드카드 바인딩이라 문제없음.
+> **WSL2 주의**: Windows 브라우저 → WSL :2024 직접 접속은 포트 중계가 불안정해
+> (Windows 측에 2024 리스너가 안 생기는 사례 실측) UI가 "Failed to connect to
+> LangGraph server"를 띄울 수 있다. **해결: UI 내장 API passthrough 사용** —
+> `ui/.env`를 `NEXT_PUBLIC_API_URL=http://localhost:3000/api` +
+> `LANGGRAPH_API_URL=http://localhost:2024`로 설정하면 브라우저는 :3000만 쓰고
+> Next 서버가 내부에서 :2024로 중계한다 (Phase 6 단일 Space 구성과 동일 방식).
+> Windows 호스트에서 `/api/info` 200 검증 완료.
 
 ### 4c — 브랜딩·커스터마이징
 
