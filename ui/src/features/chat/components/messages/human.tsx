@@ -4,6 +4,7 @@ import { useState, useRef, memo } from "react";
 import { getContentString } from "../utils";
 import { cn } from "@/lib/utils";
 import { STREAM_OPTIONS } from "@/lib/constants";
+import { modelRunConfig } from "@/lib/models";
 import { Textarea } from "@/shared/components/ui/textarea";
 import { BranchSwitcher, CommandBar } from "./shared";
 import { MultimodalPreview } from "@/features/chat/components/content/MultimodalPreview";
@@ -64,6 +65,7 @@ export const HumanMessage = memo(function HumanMessage({
       {
         checkpoint: parentCheckpoint,
         ...STREAM_OPTIONS,
+        config: modelRunConfig(),
         optimisticValues: (prev) => {
           const values = meta?.firstSeenState?.values;
           if (!values) return prev;

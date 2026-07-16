@@ -34,6 +34,7 @@ import { ActionBar } from "./ActionBar";
 import { ContentBlocksPreview } from "../content/ContentBlocksPreview";
 import type { UseSchemaUIReturn } from "@/features/chat/hooks/useSchemaUI";
 import type { Assistant } from "@/app/actions/assistant";
+import type { ModelOption } from "@/lib/models";
 import type { Base64ContentBlock } from "@langchain/core/messages";
 import { UI } from "@/lib/constants";
 
@@ -81,6 +82,11 @@ interface UnifiedInputAreaProps {
   enableGraphSelection?: boolean;
   enableAdvancedInput?: boolean;
   fileUploadMode?: "base64" | "url";
+
+  // Model selector
+  models?: ModelOption[];
+  modelSpec?: string;
+  onModelChange?: (spec: string) => void;
 }
 
 export function UnifiedInputArea({
@@ -113,6 +119,9 @@ export function UnifiedInputArea({
   enableGraphSelection = true,
   enableAdvancedInput = true,
   fileUploadMode = "base64",
+  models,
+  modelSpec,
+  onModelChange,
 }: UnifiedInputAreaProps) {
   const t = useTranslations("chat");
   const {
@@ -387,6 +396,9 @@ export function UnifiedInputArea({
                   onAssistantChange={onAssistantChange}
                   onRefreshAssistants={onRefreshAssistants}
                   enableGraphSelection={enableGraphSelection}
+                  models={models}
+                  modelSpec={modelSpec}
+                  onModelChange={onModelChange}
                 />
               </>
             );

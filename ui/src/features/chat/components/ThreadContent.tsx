@@ -14,6 +14,12 @@ import { StickToBottom } from "use-stick-to-bottom";
 import { toast } from "sonner";
 import { useMediaQuery } from "@/shared/hooks/useMediaQuery";
 import { useFileUpload } from "@/shared/hooks/useFileUpload";
+import {
+  fetchAvailableModels,
+  getStoredModelSpec,
+  storeModelSpec,
+  type ModelOption,
+} from "@/lib/models";
 import { useSettings } from "@/shared/hooks/useSettings";
 import { useAssistantConfig } from "@/shared/hooks/useAssistantConfig";
 import { useSchemaUI } from "@/features/chat/hooks/useSchemaUI";
@@ -67,6 +73,28 @@ export function ThreadContent() {
     handlePaste,
   } = useFileUpload();
   const isLargeScreen = useMediaQuery("(min-width: 1024px)");
+
+  // 응답 모델 선택 — 서버가 벤더 API 키 존재 여부로 필터한 목록만 노출.
+  // 선택값은 localStorage에 저장되고 useMessageSubmit이 submit 시점에 읽는다.
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
+  const [modelSpec, setModelSpec] = useState(getStoredModelSpec);
+  useEffect(() => {
+    fetchAvailableModels().then((models) => {
+      setAvailableModels(models);
+      // 저장된 선택이 목록에서 사라졌으면(키 회수 등) 첫 모델로 되돌린다
+      if (
+        models.length > 0 &&
+        !models.some((m) => m.spec === getStoredModelSpec())
+      ) {
+        setModelSpec(models[0].spec);
+        storeModelSpec(models[0].spec);
+      }
+    });
+  }, []);
+  const handleModelChange = useCallback((spec: string) => {
+    setModelSpec(spec);
+    storeModelSpec(spec);
+  }, []);
 
   // Schema UI for dynamic form fields
   const schemaUI = useSchemaUI();
@@ -353,6 +381,9 @@ export function ThreadContent() {
                       onAssistantChange={handleAssistantChange}
                       onRefreshAssistants={refetchAssistants}
                       isChatPage={!!threadId}
+                      models={availableModels}
+                      modelSpec={modelSpec}
+                      onModelChange={handleModelChange}
                       enableGraphSelection={
                         globalSettings["features.enableGraphSelection"]
                       }

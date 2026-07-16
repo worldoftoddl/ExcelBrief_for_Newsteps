@@ -19,7 +19,9 @@ import {
   TooltipTrigger,
 } from "@/shared/components/ui/tooltip";
 import { AssistantSelector } from "../input/AssistantSelector";
+import { ModelSelector } from "../input/ModelSelector";
 import type { Assistant } from "@/app/actions/assistant";
+import type { ModelOption } from "@/lib/models";
 
 interface ActionBarProps {
   isFormMode: boolean;
@@ -42,6 +44,11 @@ interface ActionBarProps {
   onAssistantChange: (value: string) => void;
   onRefreshAssistants: () => void;
   enableGraphSelection?: boolean;
+
+  // Model selector (빈 배열이면 렌더하지 않음)
+  models?: ModelOption[];
+  modelSpec?: string;
+  onModelChange?: (spec: string) => void;
 }
 
 export function ActionBar({
@@ -59,6 +66,9 @@ export function ActionBar({
   onAssistantChange,
   onRefreshAssistants,
   enableGraphSelection = true,
+  models = [],
+  modelSpec = "",
+  onModelChange,
 }: ActionBarProps) {
   const t = useTranslations("chat");
 
@@ -104,6 +114,26 @@ export function ActionBar({
               </TooltipTrigger>
               <TooltipContent side="top">
                 <p>{t("assistant.selectGraph")}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+
+        {onModelChange && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <ModelSelector
+                    models={models}
+                    value={modelSpec}
+                    onSelect={onModelChange}
+                    disabled={isLoading}
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>응답 모델 선택</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

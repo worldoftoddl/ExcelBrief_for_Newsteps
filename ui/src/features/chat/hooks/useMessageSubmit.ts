@@ -10,6 +10,7 @@ import { useTranslations } from "next-intl";
 import type { Checkpoint, Message } from "@langchain/langgraph-sdk";
 import type { Base64ContentBlock } from "@langchain/core/messages";
 import { STREAM_OPTIONS } from "@/lib/constants";
+import { modelRunConfig } from "@/lib/models";
 import { ensureToolCallsHaveResponses } from "@/lib/utils/ensure-tool-responses";
 import { extractDisplayName } from "@/lib/utils/file-upload";
 import { toast } from "sonner";
@@ -217,6 +218,7 @@ export function useMessageSubmit(options: UseMessageSubmitOptions) {
           { messages: [...toolMessages, newHumanMessage], ...schemaPayload },
           {
             ...STREAM_OPTIONS,
+            config: modelRunConfig(),
             optimisticValues: (prev) => ({
               ...prev,
               messages: [
@@ -228,7 +230,10 @@ export function useMessageSubmit(options: UseMessageSubmitOptions) {
           },
         );
       } else {
-        stream.submit(schemaPayload, STREAM_OPTIONS);
+        stream.submit(schemaPayload, {
+          ...STREAM_OPTIONS,
+          config: modelRunConfig(),
+        });
       }
     },
     [
@@ -257,6 +262,7 @@ export function useMessageSubmit(options: UseMessageSubmitOptions) {
       stream.submit(undefined, {
         checkpoint: parentCheckpoint,
         ...STREAM_OPTIONS,
+        config: modelRunConfig(),
       });
     },
     [stream],
@@ -280,12 +286,15 @@ export function useMessageSubmit(options: UseMessageSubmitOptions) {
 
       stream.submit(
         { messages: [...toolMessages, lastHumanMessage] },
-        STREAM_OPTIONS,
+        { ...STREAM_OPTIONS, config: modelRunConfig() },
       );
     } else if (lastFormSubmissionPayloadRef.current) {
       setFirstTokenReceived(false);
       stream.clearNodeUpdates();
-      stream.submit(lastFormSubmissionPayloadRef.current, STREAM_OPTIONS);
+      stream.submit(lastFormSubmissionPayloadRef.current, {
+        ...STREAM_OPTIONS,
+        config: modelRunConfig(),
+      });
     }
   }, [messages, stream]);
 
@@ -314,7 +323,7 @@ export function useMessageSubmit(options: UseMessageSubmitOptions) {
 
     setFirstTokenReceived(false);
     resetForm();
-    stream.submit(payload, STREAM_OPTIONS);
+    stream.submit(payload, { ...STREAM_OPTIONS, config: modelRunConfig() });
   }, [
     t,
     isAssistantSelected,
