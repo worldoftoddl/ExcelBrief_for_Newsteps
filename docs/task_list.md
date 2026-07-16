@@ -239,6 +239,11 @@ README로 프로젝트 소개 완결 (PRD 성공 기준 5).
       첨부 docx를 read_document로 읽어 답변 확인
     - 유의: HF Space 파일시스템은 휘발성 — 업로드 파일은 Space 재시작 시 사라짐
       (데모 용도로 허용)
+    - Space 배포 검증(커밋 9194704, factory rebuild): /api/upload 저장·형식 거부
+      정상, 에이전트가 업로드 docx를 read_document로 읽어 답변 완주. 검증 후
+      일반 재시작으로 테스트 업로드 파일 제거. 참고: HF 프록시가 SSE 응답의
+      content-type 헤더를 제거해 langgraph_sdk 스트리밍은 TransportError가 나지만
+      curl/브라우저(fetch)는 정상 — SDK로 Space를 칠 때는 raw HTTP 사용
 - [ ] SpreadsheetLLM류 압축 인코딩 도구 (초대형 워크북)
 - [ ] `read_table`/`query` — DataFrame 등록 + pandas 표현식 계산 위임
       (참조 구현 보유. eval이 공개 Space에서 임의 코드 실행이 되므로 격리 설계 필요)
