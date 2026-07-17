@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "감사조서 Excel을 회계감사기준·K-IFRS에 근거해 설명하는 에이전트 (포트폴리오 MVP)"
 requires-python = ">=3.11"
 dependencies = [
+    "beautifulsoup4",
     "duckdb",
+    "httpx",
     "langchain",
     "langgraph",
     "langgraph-cli[inmem]",
