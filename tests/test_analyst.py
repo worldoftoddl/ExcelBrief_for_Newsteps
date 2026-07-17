@@ -52,6 +52,45 @@ def test_pick_table_block_prefers_largest(table_dir):
     assert ref == "A3:C6"  # 제목(A1, 1행짜리)이 아니라 표 본체
 
 
+def test_explicit_range_with_sheet_overrides_block_pick(table_dir):
+    nodes = AnalystNodes(model=None)
+    update = nodes.inspect_data(
+        {
+            "messages": [
+                HumanMessage(content=f"[첨부 파일: {FILE}] {SHEET}!A3:C5 범위만 집계해줘")
+            ]
+        }
+    )
+    assert update["error"] is None
+    assert update["dataset"]["cell_range"] == "A3:C5"  # 자동 선택(A3:C6)이 아니라 명시 범위
+    assert update["profile"]["row_count"] == 2
+
+
+def test_explicit_range_without_sheet_on_single_sheet(table_dir):
+    nodes = AnalystNodes(model=None)
+    update = nodes.inspect_data(
+        {"messages": [HumanMessage(content=f"[첨부 파일: {FILE}] A3:C6 집계해줘")]}
+    )
+    assert update["error"] is None
+    assert update["dataset"] == {"path": FILE, "sheet": SHEET, "cell_range": "A3:C6"}
+
+
+def test_no_block_error_lists_sheets(table_dir):
+    from openpyxl import Workbook as WB
+
+    wb = WB()
+    wb.active.title = "표지"
+    wb.active["A1"] = "제목뿐"
+    wb.save(table_dir / "빈조서.xlsx")
+    nodes = AnalystNodes(model=None)
+    update = nodes.inspect_data(
+        {"messages": [HumanMessage(content="[첨부 파일: 빈조서.xlsx] 집계해줘")]}
+    )
+    assert update["error"] is not None
+    assert "표지" in update["error"]  # 시트 목록 안내
+    assert "시트명!A1:C50" in update["error"]  # 범위 지정 안내
+
+
 def test_inspect_data_without_file_lists_candidates(table_dir):
     nodes = AnalystNodes(model=None)  # inspect는 LLM 미사용
     update = nodes.inspect_data(

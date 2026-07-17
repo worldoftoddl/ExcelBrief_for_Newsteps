@@ -63,12 +63,40 @@ def test_scan_signoffs_ignores_long_sentences(review_dir):
 
 
 def test_collect_evidence_sections(review_dir):
-    out = _collect_evidence(FILE)
+    out, examined, skipped = _collect_evidence(FILE)
     assert "워크북:" in out  # overview
     assert "수식 지도:" in out and "하드코딩" in out  # formula_map
     assert "주석·의도 정보:" in out  # annotations
     assert "[서명란 스캔]" in out
     assert "소액현금" in out  # 본문 정독 포함
+    # 서명란 스캔은 절단(MAX_EVIDENCE_CHARS)에서 살아남도록 증거 선두에 있다
+    assert out.index("[서명란 스캔]") < out.index("수식 지도:")
+    assert examined == [SHEET] and skipped == []
+
+
+def test_collect_evidence_sheet_cap_and_report_scope(review_dir):
+    from openpyxl import load_workbook
+
+    wb = load_workbook(review_dir / FILE)
+    for i in range(1, 8):  # 기존 1개 + 7개 = 8개 시트 (상한 6개 초과)
+        ws = wb.create_sheet(f"추가{i}")
+        ws["A1"] = "항목"
+        ws["A2"] = "값"
+    wb.save(review_dir / FILE)
+
+    out, examined, skipped = _collect_evidence(FILE)
+    assert len(examined) == 6 and examined[0] == SHEET
+    assert skipped == ["추가6", "추가7"]
+    assert "추가6, 추가7" in out  # 생략 시트가 증거에도 명시
+
+    findings = ReviewFindings(
+        workpaper_purpose="p", performed_procedures=[], missing_procedures=[],
+        signoff_assessment="s", tieout_findings=[], open_items=[], overall="o",
+    )
+    report = _render_report(FILE, findings, examined, skipped)
+    assert "## 점검 범위" in report
+    assert "점검한 시트(6개)" in report
+    assert "생략된 시트(2개" in report and "추가7" in report
 
 
 def test_locate_without_file_lists_candidates(review_dir):

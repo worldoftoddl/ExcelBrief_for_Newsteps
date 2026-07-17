@@ -92,13 +92,20 @@ def _clip_block_ref(block: dict) -> str:
     )
 
 
-def _collect_evidence(path_name: str) -> str:
-    """검토에 필요한 기계 증거를 기존 도구 함수로 수집한다 (비LLM)."""
+def _collect_evidence(path_name: str) -> tuple[str, list[str], list[str]]:
+    """검토에 필요한 기계 증거를 기존 도구 함수로 수집한다 (비LLM).
+
+    (증거 텍스트, 점검한 시트, 생략한 시트)를 돌려준다 — 보고서가 점검
+    범위를 결정적으로 표기할 수 있게. 서명란 스캔은 핵심 증거라 증거
+    선두(개요 직후)에 둔다 — 뒤에 두면 MAX_EVIDENCE_CHARS 절단 시 가장
+    먼저 잘려나간다.
+    """
     target = _resolve(path_name)
-    parts = [excel_workbook_overview.func(path_name)]
     wb = _load(target, data_only=True)
     visible = [ws for ws in wb.worksheets if ws.sheet_state == "visible"]
-    skipped = len(visible) - MAX_SHEETS
+    examined = [ws.title for ws in visible[:MAX_SHEETS]]
+    skipped = [ws.title for ws in visible[MAX_SHEETS:]]
+    parts = [excel_workbook_overview.func(path_name), _scan_signoffs(target)]
     for ws in visible[:MAX_SHEETS]:
         parts.append(excel_formula_map.func(path_name, ws.title))
         parts.append(excel_get_annotations.func(path_name, ws.title))
@@ -108,13 +115,15 @@ def _collect_evidence(path_name: str) -> str:
             parts.append(
                 excel_read_range.func(path_name, ws.title, _clip_block_ref(largest))
             )
-    if skipped > 0:
-        parts.append(f"(주의: 시트 {skipped}개는 증거 수집에서 생략됨 — 상한 {MAX_SHEETS}개)")
-    parts.append(_scan_signoffs(target))
+    if skipped:
+        parts.append(
+            f"(주의: 시트 {len(skipped)}개는 증거 수집에서 생략됨 — "
+            f"상한 {MAX_SHEETS}개: {', '.join(skipped)})"
+        )
     evidence = "\n\n".join(parts)
     if len(evidence) > MAX_EVIDENCE_CHARS:
         evidence = evidence[:MAX_EVIDENCE_CHARS] + "\n… (증거 절단 — 상한 초과)"
-    return evidence
+    return evidence, examined, skipped
 
 
 # ── LLM 구조화 소견 ──────────────────────────────────────────────────────
@@ -155,12 +164,19 @@ class ReviewerState(TypedDict, total=False):
     question: str
     path: str
     evidence: str
+    examined: list  # 증거를 수집한 시트
+    skipped: list  # 상한 초과로 생략된 시트
     findings: dict
     attempts: int
     error: str | None
 
 
-def _render_report(path: str, findings: ReviewFindings) -> str:
+def _render_report(
+    path: str,
+    findings: ReviewFindings,
+    examined: list[str] | None = None,
+    skipped: list[str] | None = None,
+) -> str:
     def _finding_lines(items: list[Finding]) -> list[str]:
         if not items:
             return ["- (해당 없음)"]
@@ -197,6 +213,20 @@ def _render_report(path: str, findings: ReviewFindings) -> str:
         "## ⑦ 총평",
         findings.overall,
         "",
+    ]
+    if examined:
+        lines += [
+            "## 점검 범위",
+            f"- 점검한 시트({len(examined)}개): {', '.join(examined)}",
+            (
+                f"- 생략된 시트({len(skipped)}개, 상한 {MAX_SHEETS}개 초과): "
+                f"{', '.join(skipped)} — 필요하면 해당 시트만 담긴 파일로 다시 요청하세요."
+                if skipped
+                else "- 생략된 시트: 없음"
+            ),
+            "",
+        ]
+    lines += [
         "---",
         "*이 보고서는 조서 파일의 기계 수집 증거(구조·수식·주석·서명란)만으로 "
         "작성되었습니다. 감사기준서·K-IFRS 근거 인용이 필요하면 agent 그래프"
@@ -227,7 +257,13 @@ class ReviewerNodes:
     def collect(self, state: ReviewerState) -> dict[str, Any]:
         emit("collecting", f"증거 수집 중: {state['path']} (구조·수식·주석·서명란)")
         try:
-            return {"evidence": _collect_evidence(state["path"]), "error": None}
+            evidence, examined, skipped = _collect_evidence(state["path"])
+            return {
+                "evidence": evidence,
+                "examined": examined,
+                "skipped": skipped,
+                "error": None,
+            }
         except ValueError as exc:
             return {"error": str(exc)}
 
@@ -279,7 +315,12 @@ class ReviewerNodes:
     def report(self, state: ReviewerState) -> dict[str, Any]:
         emit("reporting", "검토 보고서를 작성하는 중")
         findings = ReviewFindings.model_validate(state["findings"])
-        text = _render_report(state["path"], findings)
+        text = _render_report(
+            state["path"],
+            findings,
+            state.get("examined"),
+            state.get("skipped"),
+        )
         emit("complete", "조서 검토 완료")
         return {"messages": [AIMessage(content=text)], "error": None}
 

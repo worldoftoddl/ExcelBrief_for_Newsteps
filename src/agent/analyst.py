@@ -15,6 +15,7 @@ awesome-llm-apps/For_me/langgraph_data_analysis_agent의 고정 워크플로
   - 모델은 메인 그래프와 동일하게 config["configurable"]["model"]로 라우팅
 """
 
+import re
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -43,6 +44,12 @@ from agent.tools.table import (
 )
 
 MAX_SQL_REVISIONS = 2
+
+# 질문 속 "시트명!A1:C50" 또는 "A1:C50" — 명시 범위는 자동 블록 선택보다 우선
+_RANGE_RE = re.compile(
+    r"(?:(?P<sheet>[\w.\-]{1,31})!)?"
+    r"(?P<range>\$?[A-Za-z]{1,3}\$?\d{1,7}:\$?[A-Za-z]{1,3}\$?\d{1,7})"
+)
 
 
 class SQLPlan(BaseModel):
@@ -87,6 +94,26 @@ def _trim_title_rows(ws, block: dict) -> str:
     )
 
 
+def _explicit_range(target, texts: list[str]):
+    """질문에 명시된 범위를 찾아 (시트, 범위)로 돌려준다. 없으면 None.
+
+    시트명이 붙어 있으면 그 시트가 실제로 있을 때만 쓰고, 시트명이 없으면
+    보이는 시트가 하나뿐일 때만 그 시트로 확정한다 — 여러 시트 중 어느
+    시트인지 추정하지 않는다 (자동 블록 선택으로 폴백).
+    """
+    wb = _load(target, data_only=True)
+    visible = [ws.title for ws in wb.worksheets if ws.sheet_state == "visible"]
+    for text in texts:
+        for match in _RANGE_RE.finditer(text):
+            cell_range = match.group("range").replace("$", "").upper()
+            sheet = match.group("sheet")
+            if sheet and sheet in visible:
+                return sheet, cell_range
+            if not sheet and len(visible) == 1:
+                return visible[0], cell_range
+    return None
+
+
 def _pick_table_block(target, texts: list[str]):
     """가장 큰 값-블록(헤더+데이터 2행 이상)을 고른다. 시트명 언급 시 그 시트로 한정."""
     wb = _load(target, data_only=True)
@@ -123,11 +150,23 @@ class AnalystNodes:
                 "error": missing_file_message("분석할 Excel 파일을 찾지 못했습니다."),
             }
 
-        picked = _pick_table_block(target, texts)
+        picked = _explicit_range(target, texts)
+        if picked:
+            _emit("profiling", f"질문에 명시된 범위 사용: [{picked[0]}] {picked[1]}")
+        else:
+            picked = _pick_table_block(target, texts)
         if picked is None:
+            wb = _load(target, data_only=True)
+            sheets = ", ".join(
+                ws.title for ws in wb.worksheets if ws.sheet_state == "visible"
+            )
             return {
                 "question": question,
-                "error": f"'{target.name}'에서 표 형태의 데이터 블록(2행 이상)을 찾지 못했습니다.",
+                "error": (
+                    f"'{target.name}'에서 표 형태의 데이터 블록(2행 이상)을 찾지 "
+                    f"못했습니다. (시트: {sheets}) 분석할 범위를 '시트명!A1:C50' "
+                    f"형식으로 지정해 다시 요청해 주세요."
+                ),
             }
         sheet, cell_range = picked
         _emit("profiling", f"표 등록: {target.name} [{sheet}] {cell_range}")
