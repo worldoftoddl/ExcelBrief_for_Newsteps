@@ -21,6 +21,9 @@ export function ChatContent({
 }: ChatContentProps) {
   return (
     <StreamProvider
+      // connection이 바뀌면(그래프 전환 후 router.refresh) 스트림 하위 트리를
+      // 리마운트한다 — MainLayoutClient의 ThreadProvider key와 같은 패턴.
+      key={`${initialConnection.apiUrl}:${initialConnection.assistantId}`}
       initialAssistantData={initialAssistantData}
       connection={initialConnection}
       enableGraphSelection={enableGraphSelection}

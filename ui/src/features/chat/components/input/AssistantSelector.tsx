@@ -1,6 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Assistant } from "@/app/actions/assistant";
+import { GRAPH_META } from "@/configs/graphs";
 import { useTranslations } from "next-intl";
 import {
   Select,
@@ -18,24 +19,12 @@ interface AssistantSelectorProps {
   onRefresh: () => void;
 }
 
-/**
- * graph_id → 한국어 표시명.
- * langgraph 서버가 자동 생성하는 assistant의 name은 graph_id 그대로라
- * (컨테이너 재시작 시 초기화되므로 서버 쪽 rename은 유지되지 않음)
- * 표시 단계에서 매핑한다.
- */
-const GRAPH_DISPLAY_NAMES: Record<string, string> = {
-  agent: "조서 해설 Agent",
-  analyst: "대형 엑셀 분석 Agent",
-  reviewer: "조서 검토 Agent",
-};
-
 function formatAssistantLabel(assistant?: Assistant | null) {
   if (!assistant) {
     return "";
   }
   const displayName =
-    assistant.graph_id && GRAPH_DISPLAY_NAMES[assistant.graph_id];
+    assistant.graph_id && GRAPH_META[assistant.graph_id]?.displayName;
   if (displayName) {
     return displayName;
   }

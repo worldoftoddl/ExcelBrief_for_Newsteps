@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { TIMING } from "@/lib/constants";
@@ -45,7 +46,8 @@ export function ThreadContent() {
   const t = useTranslations("chat");
   const { config, userSettings, updateUserSettings, globalSettings } =
     useSettings();
-  const [threadId] = useQueryState("threadId");
+  const [threadId, setThreadId] = useQueryState("threadId");
+  const router = useRouter();
 
   // Tracing panel state
   const sidebarOpen = userSettings.tracingPanelOpen;
@@ -230,12 +232,18 @@ export function ThreadContent() {
     [currentAssistantId],
   );
 
+  // 그래프 전환: 쿠키 갱신 후 router.refresh()로 서버 컴포넌트만 다시 실행한다.
+  // upstream은 window.location.reload()를 썼지만 전체 리로드는 화면이 하얗게
+  // 깜빡인다 — layout/page가 새 쿠키를 읽어 내려보내면 connection key 리마운트
+  // (MainLayoutClient·ChatContent)가 하위 트리를 새 그래프로 교체한다.
+  // 스레드는 그래프 종속이므로 전환 시 새 채팅으로 시작한다.
   const handleAssistantChange = useCallback(
     async (value: string) => {
       if (value === "none") {
         if (currentAssistantId) {
           await updateAssistantIdAction(null);
-          window.location.reload();
+          await setThreadId(null);
+          router.refresh();
         }
         return;
       }
@@ -246,12 +254,13 @@ export function ThreadContent() {
       }
 
       await updateAssistantIdAction(trimmedValue);
+      await setThreadId(null);
       toast.success(t("graphChanged"), {
         description: t("graphChangedDescription", { assistantId: value }),
       });
-      window.location.reload();
+      router.refresh();
     },
-    [currentAssistantId, t],
+    [currentAssistantId, t, router, setThreadId],
   );
 
   useEffect(() => {

@@ -7,6 +7,7 @@ import React, {
   ReactNode,
   useTransition,
 } from "react";
+import { useRouter } from "next/navigation";
 import {
   getAssistantDataAction,
   updateAssistantConfigAction,
@@ -70,6 +71,7 @@ export const AssistantConfigProvider: React.FC<{
 }) => {
   // Use Server Action transition for non-blocking updates
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   // Initialize state from SSR data
   const [config, setConfig] = useState<AssistantConfigType | null>(
@@ -225,9 +227,12 @@ export const AssistantConfigProvider: React.FC<{
       }
 
       // Import dynamically to avoid server-side issues
+      // 전체 리로드 대신 router.refresh()로 서버 컴포넌트만 재실행한다
+      // (쿠키가 유지되지 않는 환경에서도 autoSelectTriggeredRef가 남아
+      // 리로드 루프에 빠지지 않는다).
       import("@/app/actions").then(({ updateAssistantIdAction }) => {
         updateAssistantIdAction(targetAssistantId).then(() => {
-          window.location.reload();
+          router.refresh();
         });
       });
     }
@@ -237,6 +242,7 @@ export const AssistantConfigProvider: React.FC<{
     assistants,
     enableGraphSelection,
     defaultGraphId,
+    router,
   ]);
 
   // Update config using Server Action

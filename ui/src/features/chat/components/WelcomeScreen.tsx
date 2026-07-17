@@ -3,6 +3,8 @@ import { cn } from "@/lib/utils";
 import { BookOpen, LoaderCircle } from "lucide-react";
 import type { ChatConfig } from "@/lib/config/client";
 import { CHAT_STARTERS } from "@/configs/site";
+import { GRAPH_META } from "@/configs/graphs";
+import { useAssistantConfig } from "@/shared/hooks/useAssistantConfig";
 import { MarkdownText } from "./content/MarkdownText";
 import {
   Dialog,
@@ -67,6 +69,15 @@ export function WelcomeScreen({
   isSchemaLoading,
   onStarterClick,
 }: WelcomeScreenProps) {
+  // 선택된 그래프에 맞는 소개문·예시 질문 (미등록 graph_id는 기본값)
+  const { assistantId, assistants } = useAssistantConfig();
+  const graphId = assistants.find(
+    (a) => a.assistant_id === assistantId,
+  )?.graph_id;
+  const graphMeta = graphId ? GRAPH_META[graphId] : undefined;
+  const description = graphMeta?.description ?? config.branding.description;
+  const starters = graphMeta?.starters ?? CHAT_STARTERS;
+
   return (
     <div
       className={cn(
@@ -88,9 +99,9 @@ export function WelcomeScreen({
             {config.branding.appName}
           </h1>
         </div>
-        {config.branding.description && (
+        {description && (
           <p className="text-muted-foreground text-center text-base">
-            {config.branding.description}
+            {description}
           </p>
         )}
         <GuideDialog />
@@ -98,7 +109,7 @@ export function WelcomeScreen({
 
       {onStarterClick && (
         <div className="flex flex-wrap justify-center gap-2 px-4">
-          {CHAT_STARTERS.map((starter) => (
+          {starters.map((starter) => (
             <button
               key={starter}
               type="button"
