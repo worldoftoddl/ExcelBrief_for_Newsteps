@@ -290,6 +290,77 @@ async def test_cite_runs_findings_concurrently(review_dir, monkeypatch):
     assert elapsed < 0.9  # 직렬(1.2초)이 아니라 병렬(~0.4초) 실행
 
 
+class _StubChatModel:
+    """1응답에 standards_search 호출, 2응답에 최종 답을 내는 스텁."""
+
+    def __init__(self) -> None:
+        from langchain_core.messages import AIMessage as AI
+
+        self._responses = [
+            AI(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "standards_search",
+                        "args": {"query": "외부조회"},
+                        "id": "c1",
+                        "type": "tool_call",
+                    }
+                ],
+            ),
+            AI(content="감사기준서 505 문단 7 (`KSA::505::7`)이 근거입니다."),
+        ]
+
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        return self._responses.pop(0)
+
+
+async def test_chat_uses_standards_tools(review_dir, monkeypatch):
+    from types import SimpleNamespace
+
+    import agent.reviewer as reviewer_mod
+
+    calls = []
+
+    async def search_fn(**kwargs):
+        calls.append(kwargs)
+        return '{"results": [{"cid": "KSA::505::7", "display": "감사기준서 505 문단 7"}]}'
+
+    async def fake_tools():
+        return [SimpleNamespace(name="standards_search", coroutine=search_fn)]
+
+    monkeypatch.setattr(reviewer_mod, "get_standards_tools", fake_tools)
+    nodes = ReviewerNodes(model=_StubChatModel())
+    update = await nodes.chat(
+        {"messages": [HumanMessage(content="외부조회 근거 기준이 뭐야?")]}
+    )
+    assert calls and calls[0]["query"] == "외부조회"  # 도구가 실제 실행됨
+    assert "KSA::505::7" in update["messages"][0].content
+
+
+async def test_chat_degrades_without_mcp(review_dir, monkeypatch):
+    from langchain_core.messages import AIMessage as AI
+
+    import agent.reviewer as reviewer_mod
+
+    async def no_tools():
+        return []
+
+    class _PlainModel:
+        async def ainvoke(self, messages):
+            # 도구 없을 때는 bind_tools 없이 곧장 호출된다
+            assert "원문 확인 도구가 연결돼 있지 않습니다" in messages[0].content
+            return AI(content="사용법 안내입니다.")
+
+    monkeypatch.setattr(reviewer_mod, "get_standards_tools", no_tools)
+    nodes = ReviewerNodes(model=_PlainModel())
+    update = await nodes.chat({"messages": [HumanMessage(content="안녕")]})
+    assert update["messages"][0].content == "사용법 안내입니다."
+
+
 async def test_cite_graceful_without_mcp(review_dir, monkeypatch):
     import agent.reviewer as reviewer_mod
 

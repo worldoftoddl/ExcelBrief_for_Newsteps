@@ -71,6 +71,10 @@ MAX_EXTRA_EVIDENCE_CHARS = 8_000  # 추가 증거 총량
 
 MAX_CITED_FINDINGS = 5  # cite가 근거를 찾는 소견 수 (심각도순)
 
+# chat 미니 ReAct(기준서 도구)의 상한
+MAX_CHAT_TOOL_ROUNDS = 3
+MAX_CHAT_TOOL_CALLS = 4
+
 INVESTIGATE_TOOLS = (
     excel_read_range,
     excel_sheet_stats,
@@ -411,31 +415,94 @@ class ReviewerNodes:
     def route_triage(self, state: ReviewerState) -> Literal["review", "chat"]:
         return "chat" if state.get("mode") == "chat" else "review"
 
-    def chat(self, state: ReviewerState) -> dict[str, Any]:
-        """재검토 없이 답하는 일반 대화 — 역할·사용법·파일 목록을 컨텍스트로 준다."""
+    async def chat(self, state: ReviewerState) -> dict[str, Any]:
+        """재검토 없이 답하는 일반 대화 — 기준서 도구를 쥔 미니 ReAct.
+
+        맥락의 확정 인용 재전달은 도구 없이, 새 인용은 search →
+        get_paragraph 원문 확인 후에만 허용한다. MCP 미연결이면 도구 없이
+        재전달-전용 모드로 강등된다.
+        """
         emit("chatting", "일반 대화로 응답하는 중")
-        response = self.model.invoke(
-            [
-                SystemMessage(
-                    content=(
-                        "당신은 '조서 검토 Agent'입니다 — 감사조서 파일의 완성도를 "
-                        "기계 수집 증거(구조·수식·주석·서명란)로 점검해 보고서를 "
-                        "만드는 검토 모드입니다. 지금 요청은 재검토가 필요 없는 일반 "
-                        "대화로 분류되었습니다. 한국어로 간결히 답하고, 사용법을 "
-                        "물으면 안내하세요: 검토할 파일을 첨부하거나 파일명을 언급해 "
-                        "요청합니다. 이전 검토 보고서에 대한 후속 질문이면 대화 "
-                        "맥락의 보고서 내용만으로 답하고, 증거를 새로 봐야 하는 "
-                        "질문이면 재검토를 요청해 달라고 안내하세요. 대화 맥락에 "
-                        "이미 확정돼 있는 기준서 인용(근거·근거 목록의 표기와 cid)은 "
-                        "그대로 옮겨 설명해도 됩니다. 다만 맥락에 없는 기준서 번호를 "
-                        "새로 인용하지는 마세요 — 이 대화 모드에는 원문 확인 도구가 "
-                        "없습니다.\n\n"
-                        f"[현재 볼 수 있는 파일]\n{list_workpapers.func()}"
-                    )
-                ),
-                *state["messages"],
-            ]
+        standards = await get_standards_tools()
+        tools_by_name = {t.name: t for t in standards}
+        # async 노드에서 동기 파일 I/O는 blockbuster가 차단 — 스레드로 우회
+        listing = await asyncio.to_thread(list_workpapers.func)
+        citation_rule = (
+            (
+                "대화 맥락에 이미 확정돼 있는 기준서 인용(근거·근거 목록의 "
+                "표기와 cid)은 도구 없이 그대로 옮겨 설명해도 됩니다. 새로운 "
+                "기준서 근거가 필요하면 standards_search로 찾고, 인용을 확정할 "
+                "문단은 standards_get_paragraph(cid)로 원문을 확인한 뒤 표기와 "
+                "cid를 병기해 인용하세요. 낯선 용어는 standards_define_terms로 "
+                "확인합니다. 도구로 확인하지 못한 번호는 인용하지 마세요. "
+                f"도구 호출은 꼭 필요할 때만, 총 {MAX_CHAT_TOOL_CALLS}회 "
+                "이내로 사용하세요."
+            )
+            if standards
+            else (
+                "대화 맥락에 이미 확정돼 있는 기준서 인용(근거·근거 목록의 "
+                "표기와 cid)은 그대로 옮겨 설명해도 됩니다. 다만 맥락에 없는 "
+                "기준서 번호를 새로 인용하지는 마세요 — 지금은 원문 확인 "
+                "도구가 연결돼 있지 않습니다."
+            )
         )
+        messages: list = [
+            SystemMessage(
+                content=(
+                    "당신은 '조서 검토 Agent'입니다 — 감사조서 파일의 완성도를 "
+                    "기계 수집 증거(구조·수식·주석·서명란)로 점검해 보고서를 "
+                    "만드는 검토 모드입니다. 지금 요청은 재검토가 필요 없는 일반 "
+                    "대화로 분류되었습니다. 한국어로 간결히 답하고, 사용법을 "
+                    "물으면 안내하세요: 검토할 파일을 첨부하거나 파일명을 언급해 "
+                    "요청합니다. 이전 검토 보고서에 대한 후속 질문이면 대화 "
+                    "맥락의 보고서 내용으로 답하고, 조서 증거를 새로 봐야 하는 "
+                    f"질문이면 재검토를 요청해 달라고 안내하세요. {citation_rule}\n\n"
+                    f"[현재 볼 수 있는 파일]\n{listing}"
+                )
+            ),
+            *state["messages"],
+        ]
+        model = self.model
+        if standards:
+            try:
+                model = self.model.bind_tools(standards)
+            except Exception:
+                model = self.model
+
+        response = None
+        calls_used = 0
+        for round_no in range(MAX_CHAT_TOOL_ROUNDS + 1):
+            response = await model.ainvoke(messages)
+            tool_calls = getattr(response, "tool_calls", None) or []
+            if not tool_calls or round_no == MAX_CHAT_TOOL_ROUNDS:
+                break
+            messages.append(response)
+            for call in tool_calls:
+                if calls_used >= MAX_CHAT_TOOL_CALLS:
+                    messages.append(
+                        ToolMessage(
+                            content="(도구 호출 상한 도달 — 지금까지의 정보로 답하세요)",
+                            tool_call_id=call["id"],
+                        )
+                    )
+                    continue
+                emit("chatting", f"기준서 확인: {call['name']}")
+                tool = tools_by_name.get(call["name"])
+                try:
+                    result = (
+                        await _tool_text(tool, call["args"])
+                        if tool
+                        else f"오류: 알 수 없는 도구 {call['name']}"
+                    )
+                except Exception as exc:
+                    result = f"오류: {exc}"
+                calls_used += 1
+                messages.append(
+                    ToolMessage(
+                        content=str(result)[:MAX_TOOL_RESULT_CHARS],
+                        tool_call_id=call["id"],
+                    )
+                )
         emit("complete", "응답 완료")
         return {"messages": [response], "error": None}
 
