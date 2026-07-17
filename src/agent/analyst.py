@@ -15,12 +15,10 @@ awesome-llm-apps/For_me/langgraph_data_analysis_agent의 고정 워크플로
   - 모델은 메인 그래프와 동일하게 config["configurable"]["model"]로 라우팅
 """
 
-import re
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from openpyxl.utils import get_column_letter
@@ -29,7 +27,13 @@ from pydantic import BaseModel, Field
 from typing_extensions import Annotated, TypedDict
 
 from agent.graph import DEFAULT_MODEL, resolve_model
-from agent.tools.excel import _base_dir, _detect_blocks, _load, _supported_files
+from agent.graph_common import (
+    emit as _emit,
+    find_target_file as _find_target_file,
+    human_texts_newest_first as _human_texts_newest_first,
+    missing_file_message,
+)
+from agent.tools.excel import _base_dir, _detect_blocks, _load
 from agent.tools.table import (
     MAX_RESULT_ROWS,
     TABLE,
@@ -39,8 +43,6 @@ from agent.tools.table import (
 )
 
 MAX_SQL_REVISIONS = 2
-EXCEL_SUFFIXES = {".xlsx", ".xlsm", ".xls"}
-ATTACHMENT_RE = re.compile(r"\[첨부 파일: ([^\]]+)\]")
 
 
 class SQLPlan(BaseModel):
@@ -60,50 +62,6 @@ class AnalystState(TypedDict, total=False):
     result_columns: list
     result_rows: list
     truncated: bool
-
-
-def _emit(stage: str, message: str, **details: Any) -> None:
-    try:
-        get_stream_writer()({"stage": stage, "message": message, **details})
-    except RuntimeError:
-        pass
-
-
-def _msg_text(message: Any) -> str:
-    content = getattr(message, "content", "")
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return "\n".join(
-            block.get("text", "")
-            for block in content
-            if isinstance(block, dict) and block.get("type") == "text"
-        )
-    return str(content)
-
-
-def _human_texts_newest_first(state: AnalystState) -> list[str]:
-    return [
-        _msg_text(m)
-        for m in reversed(state.get("messages", []))
-        if getattr(m, "type", "") == "human"
-    ]
-
-
-def _find_target_file(texts: list[str]):
-    """메시지에서 대상 Excel 파일을 찾는다 — 첨부 표기 우선, 파일명 언급 차선."""
-    files = [
-        f for f in _supported_files(_base_dir()) if f.suffix.lower() in EXCEL_SUFFIXES
-    ]
-    for text in texts:
-        for name in reversed(ATTACHMENT_RE.findall(text)):
-            for f in files:
-                if f.name == name.strip():
-                    return f
-        for f in files:
-            if f.name in text or f.stem in text:
-                return f
-    return None
 
 
 def _trim_title_rows(ws, block: dict) -> str:
@@ -160,17 +118,9 @@ class AnalystNodes:
 
         target = _find_target_file(texts)
         if target is None:
-            listing = "\n".join(
-                f"- {f.name}"
-                for f in _supported_files(_base_dir())
-                if f.suffix.lower() in EXCEL_SUFFIXES
-            ) or "(조서 폴더가 비어 있음)"
             return {
                 "question": question,
-                "error": (
-                    "분석할 Excel 파일을 찾지 못했습니다. 파일을 첨부하거나 "
-                    f"아래 파일명 중 하나를 질문에 포함해 주세요:\n{listing}"
-                ),
+                "error": missing_file_message("분석할 Excel 파일을 찾지 못했습니다."),
             }
 
         picked = _pick_table_block(target, texts)
