@@ -53,6 +53,24 @@ export function parseConnectionCookies(
 }
 
 /**
+ * SameSite/Secure attributes for preference cookies (connection, locale).
+ *
+ * HF Space는 huggingface.co 페이지 안의 cross-site iframe으로 렌더되므로
+ * SameSite=Lax 쿠키는 iframe 요청에 실리지 않는다 — 서버가 쿠키를 못 읽어
+ * 그래프 선택이 리로드마다 기본값으로 되돌아간다. production(HTTPS)에서는
+ * None+Secure가 필요하다. dev(http://localhost)는 same-site라 Lax면 충분하고
+ * Secure 쿠키를 쓸 수 없다.
+ */
+export function crossSiteCookieAttributes(): {
+  sameSite: "none" | "lax";
+  secure: boolean;
+} {
+  return process.env.NODE_ENV === "production"
+    ? { sameSite: "none", secure: true }
+    : { sameSite: "lax", secure: false };
+}
+
+/**
  * Cookie names for external use (e.g., Next.js cookies() API)
  */
 export const CONNECTION_COOKIE_NAMES = {

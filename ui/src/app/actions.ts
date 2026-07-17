@@ -1,7 +1,10 @@
 "use server";
 
 import { cookies } from "next/headers";
-import { CONNECTION_COOKIE_NAMES } from "@/lib/connections/cookies";
+import {
+  CONNECTION_COOKIE_NAMES,
+  crossSiteCookieAttributes,
+} from "@/lib/connections/cookies";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { COOKIES } from "@/lib/constants";
 
@@ -22,9 +25,8 @@ export async function updateConnectionAction(connection: {
   const secureOptions = {
     path: "/",
     maxAge: COOKIE_MAX_AGE,
-    sameSite: "lax" as const,
     httpOnly: isProduction,
-    secure: isProduction,
+    ...crossSiteCookieAttributes(),
   };
 
   cookieStore.set(
@@ -66,9 +68,8 @@ export async function updateAssistantIdAction(assistantId: string | null) {
     cookieStore.set(CONNECTION_COOKIE_NAMES.assistantId, assistantId, {
       path: "/",
       maxAge: COOKIE_MAX_AGE,
-      sameSite: "lax",
       httpOnly: isProduction,
-      secure: isProduction,
+      ...crossSiteCookieAttributes(),
     });
   } else {
     cookieStore.delete(CONNECTION_COOKIE_NAMES.assistantId);

@@ -16,6 +16,7 @@ import {
   type Locale,
 } from "@/i18n/config";
 import { COOKIES } from "@/lib/constants";
+import { crossSiteCookieAttributes } from "@/lib/connections/cookies";
 
 /**
  * Check if request has a Bearer token in the Authorization header.
@@ -41,7 +42,7 @@ function withLocaleCookie(
     response.cookies.set(LOCALE_COOKIE_NAME, detected ?? defaultLocale, {
       path: "/",
       maxAge: COOKIES.MAX_AGE,
-      sameSite: "lax",
+      ...crossSiteCookieAttributes(),
     });
   }
   return response;
