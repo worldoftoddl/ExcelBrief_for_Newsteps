@@ -146,6 +146,128 @@ def test_render_report_sections_and_severity_order():
     assert "agent 그래프" in out  # 한계 고지
 
 
+class _StubInvestigateModel:
+    """1라운드에 excel_read_range 호출, 2라운드에 종료하는 스텁."""
+
+    def __init__(self, path: str, sheet: str) -> None:
+        from langchain_core.messages import AIMessage as AI
+
+        self._responses = [
+            AI(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "excel_read_range",
+                        "args": {"path": path, "sheet": sheet, "cell_range": "A6:C8"},
+                        "id": "t1",
+                        "type": "tool_call",
+                    }
+                ],
+            ),
+            AI(content="증거 충분"),
+        ]
+
+    def bind_tools(self, tools):
+        return self
+
+    def invoke(self, messages):
+        return self._responses.pop(0)
+
+
+def test_investigate_with_stub_model(review_dir):
+    nodes = ReviewerNodes(model=_StubInvestigateModel(FILE, SHEET))
+    update = nodes.investigate(
+        {"path": FILE, "question": "점검해줘", "evidence": "(기본 증거)"}
+    )
+    assert "소액현금" in update["extra_evidence"]  # 도구 결과가 추가 증거로 수집됨
+    assert "excel_read_range" in update["extra_evidence"]
+
+
+def test_investigate_skips_without_model(review_dir):
+    nodes = ReviewerNodes(model=None)  # bind_tools 불가 → 보충 없이 통과
+    update = nodes.investigate(
+        {"path": FILE, "question": "점검해줘", "evidence": "(기본 증거)"}
+    )
+    assert update["extra_evidence"] == ""
+
+
+def _findings_with_query() -> ReviewFindings:
+    return ReviewFindings(
+        workpaper_purpose="현금 실사 조서",
+        performed_procedures=[],
+        missing_procedures=[
+            Finding(
+                title="외부조회 미실시",
+                severity="높음",
+                location="5100!A1",
+                detail="d",
+                standards_query="외부조회 확인절차",
+                source_hint="감사기준",
+            )
+        ],
+        signoff_assessment="s",
+        tieout_findings=[],
+        open_items=[],
+        overall="o",
+    )
+
+
+async def test_cite_attaches_verified_citation(review_dir, monkeypatch):
+    from types import SimpleNamespace
+
+    import agent.reviewer as reviewer_mod
+
+    calls = []
+
+    async def search_fn(**kwargs):
+        calls.append(("search", kwargs))
+        return (
+            '{"results": [{"cid": "KSA::505::7", "display": "감사기준서 505 문단 7"}]}'
+        )
+
+    async def para_fn(**kwargs):
+        calls.append(("get_paragraph", kwargs))
+        return (
+            '{"paragraphs": [{"cid": "KSA::505::7", '
+            '"display": "감사기준서 505 문단 7"}]}'
+        )
+
+    async def fake_tools():
+        return [
+            SimpleNamespace(name="standards_search", coroutine=search_fn),
+            SimpleNamespace(name="standards_get_paragraph", coroutine=para_fn),
+        ]
+
+    monkeypatch.setattr(reviewer_mod, "get_standards_tools", fake_tools)
+    nodes = ReviewerNodes(model=None)  # cite는 LLM 미사용
+    update = await nodes.cite({"findings": _findings_with_query().model_dump()})
+
+    result = ReviewFindings.model_validate(update["findings"])
+    finding = result.missing_procedures[0]
+    assert finding.citation == "감사기준서 505 문단 7"
+    assert finding.citation_cid == "KSA::505::7"
+    assert calls[0][1]["source_type"] == ["감사기준"]  # source_hint가 필터로 전달
+    assert calls[1][0] == "get_paragraph"  # 원문 재확인 수행
+
+    report = _render_report(FILE, result)
+    assert "근거: 감사기준서 505 문단 7" in report  # 소견에 병기
+    assert "## 근거 목록" in report and "`KSA::505::7`" in report
+
+
+async def test_cite_graceful_without_mcp(review_dir, monkeypatch):
+    import agent.reviewer as reviewer_mod
+
+    async def no_tools():
+        return []
+
+    monkeypatch.setattr(reviewer_mod, "get_standards_tools", no_tools)
+    nodes = ReviewerNodes(model=None)
+    update = await nodes.cite({"findings": _findings_with_query().model_dump()})
+    result = ReviewFindings.model_validate(update["findings"])
+    assert result.missing_procedures[0].citation == ""  # 인용 없이 통과
+    assert "## 근거 목록" not in _render_report(FILE, result)
+
+
 @pytest.mark.skipif(
     not os.environ.get("ANTHROPIC_API_KEY"), reason="실 API 키 필요"
 )
