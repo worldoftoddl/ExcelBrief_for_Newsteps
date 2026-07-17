@@ -45,6 +45,27 @@ def test_find_target_file_attachment_then_mention(table_dir):
     assert _find_target_file(["아무 파일도 언급 안 함"]) is None
 
 
+def test_find_target_file_fuzzy_tokens(tmp_path, monkeypatch):
+    """밑줄·괄호를 생략한 언급을 토큰 겹침으로 잡는다 (겹침 2개 미만은 미매칭)."""
+    for name in (
+        "데모조서_5400 매출채권 (주)한빛전자 (작성중).xlsx",
+        "데모조서_5300 현금및현금성자산 (주)한빛전자.xlsx",
+    ):
+        wb = Workbook()
+        wb.active["A1"] = "x"
+        wb.save(tmp_path / name)
+    monkeypatch.setenv("WORKPAPERS_DIR", str(tmp_path))
+
+    found = _find_target_file(["작성중인 데모조서 5400 매출채권 조서를 검토해줘"])
+    assert found is not None and "5400" in found.name
+
+    found = _find_target_file(["데모조서 5300 현금 조서 해석해줘"])
+    assert found is not None and "5300" in found.name
+
+    # 토큰 1개 겹침("데모조서")만으로는 특정하지 않는다
+    assert _find_target_file(["데모조서 하나 골라줘"]) is None
+
+
 def test_pick_table_block_prefers_largest(table_dir):
     target = table_dir / FILE
     sheet, ref = _pick_table_block(target, ["부서별 합계 알려줘"])

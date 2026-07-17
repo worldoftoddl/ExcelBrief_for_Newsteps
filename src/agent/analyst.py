@@ -33,11 +33,11 @@ from typing_extensions import Annotated, TypedDict
 
 from agent.graph import DEFAULT_MODEL, resolve_model
 from agent.graph_common import (
+    conversation_context as _conversation_context,
     emit as _emit,
     find_target_file as _find_target_file,
     human_texts_newest_first as _human_texts_newest_first,
     missing_file_message,
-    msg_text as _msg_text,
 )
 from agent.tools.excel import _base_dir, _detect_blocks, _load, list_workpapers
 from agent.tools.table import (
@@ -49,8 +49,6 @@ from agent.tools.table import (
 )
 
 MAX_SQL_REVISIONS = 2
-MAX_CONTEXT_MESSAGES = 6  # plan/answer에 주입하는 직전 대화 메시지 수
-MAX_CONTEXT_CHARS = 600  # 메시지당 클립 길이
 
 # 질문 속 "시트명!A1:C50" 또는 "A1:C50" — 명시 범위는 자동 블록 선택보다 우선
 _RANGE_RE = re.compile(
@@ -110,30 +108,6 @@ def _trim_title_rows(ws, block: dict) -> str:
         f"{get_column_letter(block['c1'])}{start}:"
         f"{get_column_letter(block['c2'])}{max_row}"
     )
-
-
-def _conversation_context(state: "AnalystState") -> str:
-    """직전 대화(현재 질문 제외 최근 N개)를 plan/answer 프롬프트용으로 요약한다.
-
-    분석 경로는 원본 이식 구조상 최신 질문만 쓰는데, 스레드에서는
-    "그중 상위 3개만" 같은 후속 질의가 흔하다 — 맥락 없이는 오해한다.
-    """
-    msgs = state.get("messages") or []
-    if len(msgs) <= 1:
-        return ""
-    lines = []
-    for m in msgs[-(MAX_CONTEXT_MESSAGES + 1) : -1]:
-        kind = getattr(m, "type", None)
-        role = {"human": "사용자", "ai": "어시스턴트"}.get(kind)
-        if role is None:
-            continue
-        text = _msg_text(m).strip()
-        if not text:
-            continue
-        if len(text) > MAX_CONTEXT_CHARS:
-            text = text[:MAX_CONTEXT_CHARS] + "…"
-        lines.append(f"{role}: {text}")
-    return "\n".join(lines)
 
 
 def _explicit_range(target, texts: list[str]):

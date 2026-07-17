@@ -2,10 +2,12 @@
 
 조서 완성도 점검을 고정 워크플로로 수행한다 (범용 해설은 agent 그래프 몫):
 
-  locate(파일 탐지) → collect(기계 증거 수집) → assess(LLM 구조화 소견)
-  → report(결정적 템플릿 렌더)
+  triage(검토/대화 분기) → locate(파일 탐지) → collect(기계 증거 수집)
+  → assess(LLM 구조화 소견) → report(결정적 템플릿 렌더)
 
-LLM 호출은 assess 1회뿐이다. 증거 수집(구조·수식 지도·주석·서명란 스캔)은
+인사·사용법·이전 보고서에 대한 후속 질문은 triage가 chat 노드로 보낸다
+(LLM 분류 1회, 실패 시 파일 언급 유무 휴리스틱 폴백). 검토 경로의 LLM
+호출은 triage+assess 2회다. 증거 수집(구조·수식 지도·주석·서명란 스캔)은
 전부 비LLM이라 재현 가능하고, 보고서 형식은 템플릿이 고정한다.
 
 한계(보고서에 고지): 기준서·지침 근거 인용은 이 그래프가 하지 않는다 —
@@ -24,6 +26,7 @@ from typing_extensions import Annotated, TypedDict
 
 from agent.graph import DEFAULT_MODEL, resolve_model
 from agent.graph_common import (
+    conversation_context,
     emit,
     find_target_file,
     human_texts_newest_first,
@@ -37,6 +40,7 @@ from agent.tools.excel import (
     excel_get_annotations,
     excel_read_range,
     excel_workbook_overview,
+    list_workpapers,
 )
 
 MAX_SHEETS = 6
@@ -127,6 +131,16 @@ def _collect_evidence(path_name: str) -> tuple[str, list[str], list[str]]:
 
 
 # ── LLM 구조화 소견 ──────────────────────────────────────────────────────
+class TriageDecision(BaseModel):
+    mode: Literal["review", "chat"] = Field(
+        description=(
+            "review: 조서 파일의 완성도 점검·검토 요청. "
+            "chat: 인사·사용법 질문·기능 문의·이전 검토 보고서에 대한 후속 "
+            "설명 등 재검토가 필요 없는 대화."
+        )
+    )
+
+
 class Finding(BaseModel):
     title: str = Field(description="소견 한 줄 요약")
     severity: Literal["높음", "중간", "낮음"]
@@ -162,6 +176,7 @@ class ReviewFindings(BaseModel):
 class ReviewerState(TypedDict, total=False):
     messages: Annotated[list, add_messages]
     question: str
+    mode: str  # "review" | "chat" — triage 분기 결과
     path: str
     evidence: str
     examined: list  # 증거를 수집한 시트
@@ -238,6 +253,82 @@ def _render_report(
 class ReviewerNodes:
     def __init__(self, model) -> None:
         self.model = model
+
+    def triage(self, state: ReviewerState) -> dict[str, Any]:
+        """검토 요청인지 일반 대화인지 분기한다.
+
+        LLM 구조화 출력 1회, 실패 시 휴리스틱(파일 언급 있으면 review,
+        없으면 chat) 폴백. 이전 턴의 stale error도 여기서 리셋한다.
+        """
+        emit("triaging", "요청 유형을 판단하는 중")
+        texts = human_texts_newest_first(state)
+        question = texts[0].strip() if texts else ""
+        if not question:
+            return {"question": question, "mode": "chat", "error": None}
+        has_file = find_target_file(texts) is not None
+        context = conversation_context(state)
+        context_part = f"이전 대화:\n{context}\n" if context else ""
+        try:
+            decider = self.model.with_structured_output(TriageDecision)
+            result = decider.invoke(
+                [
+                    SystemMessage(
+                        content=(
+                            "당신은 감사조서 검토 에이전트의 라우터입니다. 사용자 "
+                            "메시지가 조서 파일의 완성도 점검·검토 요청이면 review, "
+                            "인사·사용법 질문·기능 문의·이전 검토 보고서에 대한 후속 "
+                            "설명처럼 재검토가 필요 없는 대화면 chat으로 분류하세요. "
+                            "다른 파일이나 같은 파일의 재검토를 새로 요청하면 "
+                            "review입니다."
+                        )
+                    ),
+                    HumanMessage(
+                        content=(
+                            f"{context_part}"
+                            f"메시지: {question}\n"
+                            f"메시지에 검토 대상 파일 언급 존재: {has_file}"
+                        )
+                    ),
+                ]
+            )
+            decision = (
+                result
+                if isinstance(result, TriageDecision)
+                else TriageDecision.model_validate(result)
+            )
+            mode = decision.mode
+        except Exception:
+            mode = "review" if has_file else "chat"
+        return {"question": question, "mode": mode, "error": None}
+
+    def route_triage(self, state: ReviewerState) -> Literal["review", "chat"]:
+        return "chat" if state.get("mode") == "chat" else "review"
+
+    def chat(self, state: ReviewerState) -> dict[str, Any]:
+        """재검토 없이 답하는 일반 대화 — 역할·사용법·파일 목록을 컨텍스트로 준다."""
+        emit("chatting", "일반 대화로 응답하는 중")
+        response = self.model.invoke(
+            [
+                SystemMessage(
+                    content=(
+                        "당신은 '조서 검토 Agent'입니다 — 감사조서 파일의 완성도를 "
+                        "기계 수집 증거(구조·수식·주석·서명란)로 점검해 보고서를 "
+                        "만드는 검토 모드입니다. 지금 요청은 재검토가 필요 없는 일반 "
+                        "대화로 분류되었습니다. 한국어로 간결히 답하고, 사용법을 "
+                        "물으면 안내하세요: 검토할 파일을 첨부하거나 파일명을 언급해 "
+                        "요청합니다. 이전 검토 보고서에 대한 후속 질문이면 대화 "
+                        "맥락의 보고서 내용만으로 답하고, 증거를 새로 봐야 하는 "
+                        "질문이면 재검토를 요청해 달라고 안내하세요. 기준서 번호 "
+                        "인용은 하지 마세요 — 근거 인용은 agent 그래프(기준서 도구) "
+                        "몫입니다.\n\n"
+                        f"[현재 볼 수 있는 파일]\n{list_workpapers.func()}"
+                    )
+                ),
+                *state["messages"],
+            ]
+        )
+        emit("complete", "응답 완료")
+        return {"messages": [response], "error": None}
 
     def locate(self, state: ReviewerState) -> dict[str, Any]:
         emit("locating", "검토할 조서 파일을 찾는 중")
@@ -336,13 +427,19 @@ async def reviewer(config: RunnableConfig):
     nodes = ReviewerNodes(resolve_model(model_spec))
 
     builder = StateGraph(ReviewerState)
+    builder.add_node("triage", nodes.triage)
+    builder.add_node("chat", nodes.chat)
     builder.add_node("locate", nodes.locate)
     builder.add_node("collect", nodes.collect)
     builder.add_node("assess", nodes.assess)
     builder.add_node("report", nodes.report)
     builder.add_node("fail", nodes.fail)
 
-    builder.add_edge(START, "locate")
+    builder.add_edge(START, "triage")
+    builder.add_conditional_edges(
+        "triage", nodes.route_triage, {"review": "locate", "chat": "chat"}
+    )
+    builder.add_edge("chat", END)
     builder.add_conditional_edges(
         "locate", nodes.route_locate, {"collect": "collect", "fail": "fail"}
     )

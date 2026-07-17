@@ -99,6 +99,23 @@ def test_collect_evidence_sheet_cap_and_report_scope(review_dir):
     assert "생략된 시트(2개" in report and "추가7" in report
 
 
+def test_triage_fallback_heuristic(review_dir):
+    """model=None이면 LLM 분류가 예외 → 파일 언급 유무 휴리스틱으로 폴백."""
+    nodes = ReviewerNodes(model=None)
+    update = nodes.triage(
+        {"messages": [HumanMessage(content=f"[첨부 파일: {FILE}] 검토해줘")]}
+    )
+    assert update["mode"] == "review" and update["error"] is None
+    assert nodes.route_triage(update) == "review"
+
+    update = nodes.triage({"messages": [HumanMessage(content="안녕, 사용법 알려줘")]})
+    assert update["mode"] == "chat"
+    assert nodes.route_triage(update) == "chat"
+
+    update = nodes.triage({"messages": []})  # 빈 입력도 chat으로
+    assert update["mode"] == "chat"
+
+
 def test_locate_without_file_lists_candidates(review_dir):
     nodes = ReviewerNodes(model=None)
     update = nodes.locate({"messages": [HumanMessage(content="조서 검토해줘")]})
@@ -127,6 +144,22 @@ def test_render_report_sections_and_severity_order():
     assert out.index("높음건") < out.index("낮음건")  # 심각도 정렬
     assert "- (해당 없음)" in out  # 빈 섹션 표기
     assert "agent 그래프" in out  # 한계 고지
+
+
+@pytest.mark.skipif(
+    not os.environ.get("ANTHROPIC_API_KEY"), reason="실 API 키 필요"
+)
+async def test_chat_branch_with_real_model(review_dir):
+    graph = await reviewer(
+        {"configurable": {"model": "anthropic:claude-haiku-4-5-20251001"}}
+    )
+    result = await graph.ainvoke(
+        {"messages": [HumanMessage(content="안녕! 너는 어떤 검토를 해줘?")]}
+    )
+    answer = result["messages"][-1]
+    text = answer.content if isinstance(answer.content, str) else str(answer.content)
+    assert text.strip() and "오류:" not in text
+    assert "# 조서 검토 보고" not in text  # 검토 파이프라인을 타지 않았다
 
 
 @pytest.mark.skipif(
