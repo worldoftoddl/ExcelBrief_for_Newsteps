@@ -287,6 +287,18 @@ README로 프로젝트 소개 완결 (PRD 성공 기준 5).
       혼합 열 강등 시 "nan" 문자열 생성·null 집계 0 (pd.isna로 판정해야 함)
     - e2e(Haiku): overview→read_range→load_table→query_table 순서로 자발 사용,
       한글 열명 인용 GROUP BY SQL 작성, 근거 범위(시트!범위) 병기 확인
+- [x] `analyst` 별도 그래프 (2026-07-17) — 원본의 고정 워크플로(inspect→
+      plan_sql→validate→execute→answer + revise 루프 최대 2회)를 채팅용으로
+      각색해 두 번째 그래프로 등록 (UI 그래프 셀렉터가 다중 그래프 설계라는
+      사용자 결정). 도구(tools/table.py)의 DataStore 계층을 그대로 재사용
+    - 원본과 차이: 입력이 question이 아니라 messages — 대상 파일은
+      "[첨부 파일: …]" 표기·파일명 언급에서 탐지, 표는 가장 큰 값-블록을
+      자동 선택(시트명 언급 시 한정). 제목 행(값 1개) 스킵 휴리스틱 포함
+    - 모델은 메인 그래프와 동일하게 configurable.model 라우팅.
+      진행 상황은 custom stream(_emit)으로 방출
+- [ ] 조서검토 전용 그래프 — analyst처럼 고정 워크플로로 분리 (사용자 제안,
+      2026-07-17). 범위·단계 설계 필요: 현행 agent(ReAct)는 범용 해설로 두고,
+      조서 완성도 점검(절차 누락·서명란·tie-out 검산)을 고정 단계로 뺄 후보
 - [ ] SpreadsheetLLM류 압축 인코딩 도구 (초대형 워크북) — ②의 효과 확인 후 재평가
       (참조 구현 보유. eval이 공개 Space에서 임의 코드 실행이 되므로 격리 설계 필요)
 - [x] 멀티 벤더 모델 선택 (2026-07-16) — LiteLLM 게이트웨이 대신 langchain
