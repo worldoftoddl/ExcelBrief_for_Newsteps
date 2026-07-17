@@ -14,7 +14,7 @@
                    │ LangGraph API (SSE — values·messages-tuple·custom)
 ┌──────────────────▼────────────────────────────┐
 │ LangGraph 서버 (Python)                        │  본 저장소, 그래프 4종
-│  ├─ agent     All-in-One ReAct (도구 13종)     │
+│  ├─ agent     All-in-One ReAct (도구 14종)     │
 │  ├─ explainer 조서 해설 고정 파이프라인         │
 │  ├─ analyst   대형 표 SQL 분석 고정 파이프라인  │
 │  ├─ reviewer  조서 검토 고정 파이프라인         │
@@ -37,7 +37,7 @@
 
 | 그래프 | UI 표시명 | 성격 | LLM 호출 |
 |---|---|---|---|
-| `agent` | All-in-One Agent | create_agent ReAct — 전 도구 13종, 제어 흐름 전부 모델 재량. 여러 파일 넘나드는 질문·기준서 자체 질문 | 자유 (recursion 25 상한) |
+| `agent` | All-in-One Agent | create_agent ReAct — 전 도구 14종(웹 추출 포함), 제어 흐름 전부 모델 재량. 여러 파일 넘나드는 질문·기준서 자체 질문 | 자유 (recursion 25 상한) |
 | `explainer` | 조서 해설 Agent | 고정: triage→locate→collect→investigate→explain→cite→report | 3~4회 상한 |
 | `analyst` | 대형 엑셀 분석 Agent | 고정: triage→inspect→plan→validate→execute→answer (+revise≤2) | 3~5회 상한 |
 | `reviewer` | 조서 검토 Agent | 고정: triage→locate→collect→investigate→assess→cite→report | 3~4회 상한 |
@@ -115,6 +115,8 @@ ExcelBrief_for_Newsteps/
 │   ├─ analyst.py              # 표 SQL 분석 그래프
 │   ├─ reviewer.py             # 조서 검토 그래프
 │   ├─ graph_common.py         # 파일 탐지(퍼지)·대화 맥락·emit
+│   ├─ web_extract.py          # 웹 추출 서브그래프 + agent 도구 래퍼
+│   ├─ scraping/               # 웹 취득 계층 (SSRF 방어·fetcher·정리·청킹)
 │   ├─ evidence.py             # 조서 기계 증거 수집 (공용, 비LLM)
 │   ├─ standards_lookup.py     # MCP 결과 파싱·인용 확정 (공용)
 │   ├─ citations.py            # cid → 표기 문자열

@@ -20,7 +20,7 @@ export const GRAPH_META: Record<string, GraphMeta> = {
   agent: {
     displayName: "All-in-One Agent",
     description:
-      "조서 읽기·표 SQL·기준서 검색 도구를 모두 쥔 범용 ReAct 에이전트 — " +
+      "조서 읽기·표 SQL·기준서 검색·웹 추출 도구를 모두 쥔 범용 ReAct 에이전트 — " +
       "여러 파일을 넘나드는 질문이나 기준서 자체 질문은 여기서 하세요.",
     starters: CHAT_STARTERS,
   },

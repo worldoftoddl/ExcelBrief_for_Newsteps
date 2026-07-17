@@ -31,7 +31,8 @@
 ```python
 # src/agent/graph.py (개요)
 model = resolve_model(model_spec)
-tools = EXCEL_TOOLS + TABLE_TOOLS + DOCUMENT_TOOLS + standards_tools  # 13종
+tools = EXCEL_TOOLS + TABLE_TOOLS + DOCUMENT_TOOLS \
+    + [make_web_extract_tool(model)] + standards_tools  # 14종
 create_agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT,
              middleware=[summarization_middleware(model, model_spec)])
 ```
@@ -42,6 +43,12 @@ create_agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT,
 - SummarizationMiddleware: 긴 스레드에서 오래된 이력을 요약으로 치환
   (fraction 0.75, 프로파일 미보유 모델은 anthropic 150k/local·hf 24k/기타
   100k 절대값 폴백. 요약 모델 = 라우팅된 모델).
+- `web_extract`(웹 추출)는 내부적으로 **서브그래프**를 invoke하는 도구다
+  (`web_extract.py`): validate(SSRF 차단)→fetch(재시도 3)→clean→chunk
+  →extract→merge→validate(+빈 결과 재추출 ≤2). langgraph_web_scraping_agent
+  이식 — 취득 계층은 `scraping/`(원본 문서 README.upstream.md).
+  상한: 청크 5개(초과분 버리고 고지)·결과 6,000자 클립·응답 2MB·리다이렉트 5회.
+  공개 http(s)만 허용 — 사설/루프백 IP는 DNS 해석 후 차단, 리다이렉트마다 재검증.
 
 ### 2.2 고정 파이프라인 3종 (explainer·analyst·reviewer)
 
