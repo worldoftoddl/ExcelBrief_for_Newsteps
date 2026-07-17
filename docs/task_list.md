@@ -353,3 +353,62 @@ README로 프로젝트 소개 완결 (PRD 성공 기준 5).
       **qwen3:8b-16k**를 만들어 해결 (레지스트리 spec도 이것)
     - gemma3:4b도 있었으나 Ollama에서 도구 호출 미지원이라 배제
 - ~~다중 사용자 인증·조서 접근 권한~~ — 계획에서 삭제 (2026-07-16, 사용자 결정)
+
+## 그래프 다듬기 세션 (2026-07-17 오후) — 4그래프 체제 완성·배포
+
+- [x] analyst 다듬기 — ① 질문의 명시 범위(`시트명!A1:C50`, 단일 시트면 범위만)
+      를 자동 블록 선택보다 우선 (함정: `\w`가 밑줄을 단어 문자로 취급 —
+      `[\W_]` 분리 필요) ② triage→chat/analysis 분기(LLM 분류 1회, 실패 시
+      파일 언급 휴리스틱 폴백) ③ 대화 맥락 주입 — messages는 쌓이고 있었지만
+      분석 경로가 최신 질문만 써서 스레드에서 기억상실처럼 동작(원본 단발
+      질문 구조의 이식 잔재). conversation_context(최근 6개×600자)를
+      triage·plan·answer에 주입. e2e: "그중 매출이 가장 큰 도시"를 이전 턴
+      맥락에서 해석해 WHERE 절 생성
+- [x] reviewer 다듬기 — ① triage→chat/review 분기 ② investigate 노드
+      (미니 ReAct, Excel 도구 5종, 라운드 3·호출 6 상한) — 기본 증거 부족분만
+      보충 조사 ③ cite 노드(LLM 없음) — assess가 소견별로 낸
+      standards_query·source_hint로 search→get_paragraph 재확인 인용
+      (소견 간 asyncio.gather 병렬, 실패는 인용 생략 강등) ④ 서명란 스캔을
+      증거 선두로(절단 보호) ⑤ 점검 범위(점검/생략 시트) 결정적 렌더
+      ⑥ 근거 위치를 사람 표기로("시트의 무엇(셀주소)") — 프롬프트/스키마 단
+      ⑦ chat에 기준서 MCP 미니 ReAct(라운드 3·호출 4) — 맥락 인용 재전달은
+      도구 없이, 새 인용은 도구 확인 후만
+    - 함정: async 노드의 동기 파일 I/O(list_workpapers)를 langgraph 서버
+      blockbuster가 BlockingError로 차단 → asyncio.to_thread 우회
+    - e2e: 데모조서 5400 검토 — K-IFRS 1109 5.5.15(대손충당금)·KSA 505
+      A18(조회 대체절차) 확정 인용, 후속 질문은 chat이 보고서 인용 재전달
+- [x] find_target_file 퍼지 매칭 — "데모조서 5400 매출채권"(밑줄·괄호 생략)
+      이 미매칭이던 것을 토큰 겹침(≥2, 최다 겹침)으로 해결. 환영 화면 예시
+      질문이 실패하는 실전 버그였음
+- [x] explainer 조서 해설 전용 그래프 신설 (Phase 1: evidence.py·
+      standards_lookup.py 공용 계층 추출 → Phase 2: 그래프) — reviewer와
+      같은 골격(triage→locate→collect→investigate→explain→cite→report),
+      산출물은 해설(①정체 ②시트 구성 ③절차 해설+인용 ④읽는 법 ⑤미완
+      ⑥용어 풀이 ⑦요약). 기존 agent는 "All-in-One Agent"로 개명
+- [x] agent 대화 요약 미들웨어 — SummarizationMiddleware, fraction 0.75
+      우선·프로파일 미보유 모델(실측: 기본 claude-sonnet-5조차 미등재,
+      local/hf)은 제공자별 절대값 폴백(anthropic 150k/local·hf 24k/기타
+      100k). 요약 모델은 라우팅된 모델 그대로(로컬 전용 사용자 보호)
+- [x] MCP 상한 조정 — cite 대상 5→10건, 도구 결과 클립 4k→6k자.
+      상한 전수: cite 10건×2왕복(병렬)·chat 라운드3/호출4·SEARCH_TOP_K 3·
+      전송 timeout 30s/120s·서버 top_k 1~20. agent는 recursion_limit(25)뿐
+- [x] UI 개선 일괄 — ① 그래프 셀렉터 한국어 표시명 + 그래프별 첫 화면
+      (configs/graphs.ts 단일 소스: 표시명·소개·예시 질문) ② 그래프 전환을
+      window.location.reload(하얀 깜빡임, upstream 원본 동작)에서
+      router.refresh()+connection key 리마운트로 교체, 전환 시 새 채팅
+      ③ HF iframe에서 그래프 선택이 안 유지되던 버그 — Space는 cross-site
+      iframe이라 SameSite=Lax 쿠키 미전송 → production에서 None+Secure
+      (crossSiteCookieAttributes, 연결·로케일 쿠키 적용)
+- [x] 스트리밍 차이 조사 (수정 없음, 사용자 납득) — agent만 중간 내레이션이
+      스트리밍되는 이유: ReAct는 내레이션이 messages 상태로 흘러가고, 고정
+      그래프는 중간 호출이 구조화 출력(텍스트 없음)+최종 report가 템플릿
+      렌더(토큰 없음). analyst answer는 실측상 이미 토큰 스트리밍됨
+- [x] 브랜딩 — 앱 이름 "Agent for Newstep", 첫 화면·헤더 정리, favicon 교체
+- [x] upstream 문서 복원 — langgraph-chat-ui docs/ 23종 + README 2종을
+      ui/docs/로 (이식 시 삭제했던 것, 사용자 질책 → 메모리에 원칙 기록)
+- [x] 데모 데이터 — 매출시트_데모.csv (HF AbhayBhan/SalesData 공개 더미
+      1000행) 커밋, analyst e2e·pandas 검산 일치
+- [x] Space 배포 (factory rebuild ×2) — 4그래프 서빙·새 브랜딩·쿠키 수정
+      반영 확인. 테스트 누적 118개 통과
+- [x] 로컬 무스타일 화면 재발 — 이번엔 좀비가 아니라 .next에 프로덕션 빌드
+      산출물(해시 CSS)이 덮인 변종. 진단 지표·복구 절차 메모리 갱신

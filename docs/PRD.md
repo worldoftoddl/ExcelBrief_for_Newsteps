@@ -1,6 +1,12 @@
-# PRD — ExcelBrief for Newsteps
+# PRD — Agent for Newstep (구 ExcelBrief for Newsteps)
 
-> 작성일: 2026-07-15 · 상태: 확정 (MVP 범위)
+> 작성일: 2026-07-15 · 상태: 확정 (MVP 범위) · 2026-07-17 이름 변경
+>
+> **구현 현황 (2026-07-17)**: F1~F5 전부 구현·배포 완료 (HF Space
+> toddl/excelbrief). 계획의 단일 에이전트를 넘어 그래프 4종 체제
+> (All-in-One ReAct + 조서 해설·표 SQL 분석·조서 검토 고정 파이프라인)로
+> 확장 — [architecture.md](architecture.md) 2절. 백로그였던 방문자 업로드
+> (Excel·CSV·Word)·멀티 벤더 모델 5종도 구현됨. 성공 기준 1~5 충족.
 
 ## 1. 배경과 문제
 

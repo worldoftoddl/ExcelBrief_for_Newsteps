@@ -1,39 +1,35 @@
-# 기술 문서 — ExcelBrief for Newsteps
+# 기술 문서 — Agent for Newstep (구 ExcelBrief for Newsteps)
 
-> 스택·의존성·환경변수·개발 규약.
+> 스택·의존성·환경변수·개발 규약. 2026-07-17 현행화.
 
 ## 1. 기술 스택
 
 | 계층 | 선택 | 비고 |
 |---|---|---|
-| 언어 | Python 3.11+ | 도구 내부에서 타 언어 프로세스 호출 허용 |
-| 에이전트 | langchain (`create_agent`) | 단일 에이전트로 충분 (MVP) |
-| 서버/런타임 | langgraph + langgraph-cli | `langgraph dev` → :2024 |
-| MCP 연동 | langchain-mcp-adapters | stdio/HTTP 양쪽 지원 |
-| Excel | openpyxl | 수식·병합 셀 접근 |
-| LLM (상용) | Anthropic API | 기본 `claude-sonnet-5` |
-| LLM (로컬) | vLLM 또는 Ollama | OpenAI 호환 엔드포인트 (모델 미정) |
-| UI | braincrew-lab/agent-chat-ui | Next.js 15, Node 20+, pnpm |
-| 배포 | HuggingFace Spaces (Docker) | backend·UI Space 2개 또는 단일 Space+프록시 |
-| 관측 | LangSmith | 트레이싱·평가 |
-| 테스트 | pytest + pytest-asyncio | 픽스처 xlsx 기반 |
+| 언어 | Python 3.12 | |
+| 에이전트 | langchain 1.x (`create_agent`) + langgraph StateGraph | 그래프 4종 (agent·explainer·analyst·reviewer) |
+| 서버/런타임 | langgraph + langgraph-cli | `langgraph dev --host 0.0.0.0` → :2024 (WSL2는 호스트 바인딩 필수) |
+| MCP 연동 | langchain-mcp-adapters | HTTP+Bearer 기본 / stdio 로컬 옵션 |
+| Excel | openpyxl | 수식·서식·병합 셀·주석 접근 |
+| 표 SQL | duckdb + sqlglot + pandas 3 | AST 검증 + external_access=false 2중 격리 |
+| LLM | Anthropic(기본 sonnet-5)·OpenAI·Gemini·HF Inference·Ollama | resolve_model 접두사 라우팅 |
+| UI | braincrew-lab/langgraph-chat-ui 이식 (ui/) | Next.js 15, pnpm. upstream 문서는 ui/docs/ |
+| 배포 | HuggingFace Space 단일 컨테이너 (Docker) | toddl/excelbrief — UI passthrough 프록시 |
+| 관측 | LangSmith (+MCP로 트레이스 해부) | 프로젝트 excelbrief |
+| 테스트 | pytest + pytest-asyncio | 픽스처 코드 생성 방식, 118개 |
 
-## 2. 의존성 (pyproject.toml 예정)
+## 2. 의존성 (pyproject.toml — requirements.lock으로 고정)
 
 ```
-langchain
-langgraph
-langgraph-cli[inmem]        # langgraph dev 실행용
-langchain-anthropic
-langchain-openai            # 로컬 OpenAI 호환 서버 접속용
+langchain / langgraph / langgraph-cli[inmem]
+langchain-anthropic / langchain-openai / langchain-google-genai
 langchain-mcp-adapters
-openpyxl
+openpyxl / duckdb / sqlglot / pandas / numpy
 python-dotenv
 pytest, pytest-asyncio      # dev
 ```
 
-버전은 설치 시점에 고정한다(잠금 파일 커밋). LangChain 계열은 API 변화가 잦으므로
-구현 전 반드시 최신 문서(docs.langchain.com) 대조.
+LangChain 계열은 API 변화가 잦으므로 구현 전 docs.langchain.com 실문서 대조.
 
 ## 3. 환경변수 (.env)
 
@@ -55,26 +51,22 @@ pytest, pytest-asyncio      # dev
 > 현행 명칭은 `LANGSMITH_API_KEY` / `LANGSMITH_TRACING` / `LANGSMITH_PROJECT`이며
 > 구명칭은 더 이상 동작하지 않는다.** Phase 0에서 갱신한다.
 
-## 4. 실행 방법 (구현 후)
+## 4. 실행 방법 (현행)
 
 ```bash
-# 백엔드
-cd ExcelBrief_for_Newsteps
-uv sync                      # 또는 pip install -e .
-langgraph dev                # :2024
+# 백엔드 — 그래프 4종 서빙
+.venv/bin/python -m langgraph_cli dev --no-browser --host 0.0.0.0 --port 2024
 
-# UI (최초 1회 클론)
-cd ui && pnpm install
-cp .env.example .env         # NEXT_PUBLIC_API_URL=http://localhost:2024
-pnpm dev                     # :3000
+# UI
+cd ui && pnpm install && pnpm dev    # :3000 (ui/.env에 LANGSMITH_* 포함)
+# 주의: dev 실행 중 next build 금지 (.next 충돌 → CSS 404 무스타일)
+#       재기동 전 next 프로세스 전멸 확인 후 하나만 띄울 것
 
-# (옵션) 로컬 모델
-ollama serve                 # 또는 vLLM
+# (옵션) 로컬 모델 — Ollama systemd 서비스 (:11434, qwen3:8b-16k)
 
-# 배포 — HuggingFace Spaces (Docker)
-# backend Space: Dockerfile에서 langgraph 서버 :7860 기동,
-#                시크릿(ANTHROPIC_API_KEY, MCP_AUTH_TOKEN, LANGSMITH_API_KEY) 주입
-# UI Space:      next build/start, NEXT_PUBLIC_API_URL=<backend Space URL>
+# 배포 — HF Space 단일 컨테이너 (toddl/excelbrief)
+# 빌드가 GitHub main을 clone하므로: git push 후 factory rebuild 트리거
+# (huggingface_hub restart_space(factory_reboot=True))
 ```
 
 ## 5. 개발 규약
@@ -98,9 +90,11 @@ ollama serve                 # 또는 vLLM
 
 | 제약 | 대응 |
 |---|---|
-| agent-chat-ui 업로드가 이미지·PDF만 지원 | MVP는 가상 샘플 조서 사전 배치, 방문자 업로드는 백로그 최우선 |
 | SpreadsheetLLM 공식 코드 미공개 | 커뮤니티 재구현체 검토 (백로그) |
-| `langgraph dev`는 인메모리 개발 서버 | 포트폴리오 데모 수준에선 허용. 트래픽·영속성이 필요해지면 self-hosted 컨테이너 검토 |
-| HF Space는 유휴 시 슬립 가능 | 데모 전 워밍업(첫 접속 지연 안내 문구), MCP 첫 검색 타임아웃 넉넉히 |
-| openpyxl은 계산 엔진이 없음 | 수식 결과는 저장된 캐시 값(`data_only`) 사용 — 재계산 불가함을 프롬프트에 명시 |
-| 공개 URL에 실데이터 게시 불가 | 데모 조서는 가상 데이터로 제작 |
+| `langgraph dev`는 인메모리 개발 서버 | 포트폴리오 데모 수준에선 허용. Space도 동일 방식 |
+| HF Space는 유휴 시 슬립·업로드 휘발 | 데모 전 워밍업, 업로드는 재시작 시 삭제 고지 |
+| HF Space는 cross-site iframe | SameSite=Lax 쿠키 미전송 → 선호 쿠키는 None+Secure |
+| langgraph async 노드에서 동기 I/O 차단(blockbuster) | asyncio.to_thread로 우회 |
+| openpyxl은 계산 엔진이 없음 | 수식 결과는 저장된 캐시 값(`data_only`) — 재계산 불가를 프롬프트·보고서 고지 |
+| 고정 그래프의 최종 보고서는 토큰 스트리밍 불가 | 템플릿 렌더 특성 — custom 진행 이벤트로 침묵 구간 보완 (설계상 수용) |
+| 공개 URL에 실데이터 게시 불가 | 데모 조서는 가상 데이터·공식 서식·공개 더미만 |
