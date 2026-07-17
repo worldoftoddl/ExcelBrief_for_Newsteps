@@ -5,6 +5,10 @@ awesome-llm-apps/For_me/langgraph_data_analysis_agent의 고정 워크플로
 채팅 UI용으로 각색해 이식했다. UI의 그래프 셀렉터에서 "agent"(범용 조서
 해설, ReAct)와 별도로 선택하는 데이터 분석 모드다.
 
+선두의 triage 노드가 요청을 분기한다 — 집계·계산 요청은 SQL 파이프라인
+(inspect_data 이후)으로, 인사·사용법·후속 설명 등 일반 대화는 chat 노드로
+보낸다 (LLM 분류 1회, 실패 시 파일 언급 유무 휴리스틱 폴백).
+
 원본과 다른 점:
   - 입력이 {question}이 아니라 채팅 messages — 대상 파일은 메시지의
     "[첨부 파일: …]" 표기 또는 파일명 언급에서 찾는다
@@ -34,7 +38,7 @@ from agent.graph_common import (
     human_texts_newest_first as _human_texts_newest_first,
     missing_file_message,
 )
-from agent.tools.excel import _base_dir, _detect_blocks, _load
+from agent.tools.excel import _base_dir, _detect_blocks, _load, list_workpapers
 from agent.tools.table import (
     MAX_RESULT_ROWS,
     TABLE,
@@ -57,9 +61,20 @@ class SQLPlan(BaseModel):
     rationale: str
 
 
+class TriageDecision(BaseModel):
+    mode: Literal["analysis", "chat"] = Field(
+        description=(
+            "analysis: 표 데이터에 대한 집계·필터·정렬·계산 요청. "
+            "chat: 인사·사용법 질문·기능 문의·이전 결과에 대한 후속 설명 등 "
+            "SQL 실행이 필요 없는 대화."
+        )
+    )
+
+
 class AnalystState(TypedDict, total=False):
     messages: Annotated[list, add_messages]
     question: str
+    mode: str  # "analysis" | "chat" — triage 분기 결과
     dataset: dict  # {"path": 파일명, "sheet": 시트, "cell_range": 범위}
     schema: str
     profile: dict
@@ -135,6 +150,77 @@ def _pick_table_block(target, texts: list[str]):
 class AnalystNodes:
     def __init__(self, model) -> None:
         self.model = model
+
+    def triage(self, state: AnalystState) -> dict[str, Any]:
+        """SQL 분석 요청인지 일반 대화인지 분기한다.
+
+        LLM 구조화 출력 1회로 판단하고, 실패하면 휴리스틱(파일 언급이
+        있으면 analysis, 없으면 chat)으로 폴백한다.
+        """
+        _emit("triaging", "요청 유형을 판단하는 중")
+        texts = _human_texts_newest_first(state)
+        question = texts[0].strip() if texts else ""
+        if not question:
+            return {"question": question, "mode": "chat"}
+        has_file = _find_target_file(texts) is not None
+        try:
+            decider = self.model.with_structured_output(TriageDecision)
+            result = decider.invoke(
+                [
+                    SystemMessage(
+                        content=(
+                            "당신은 데이터 분석 에이전트의 라우터입니다. 사용자 "
+                            "메시지가 표 데이터에 대한 집계·필터·정렬·계산 요청이면 "
+                            "analysis, 인사·사용법 질문·기능 문의·이전 결과에 대한 "
+                            "후속 설명처럼 SQL 실행이 필요 없는 대화면 chat으로 "
+                            "분류하세요."
+                        )
+                    ),
+                    HumanMessage(
+                        content=(
+                            f"메시지: {question}\n"
+                            f"메시지에 분석 대상 파일 언급 존재: {has_file}"
+                        )
+                    ),
+                ]
+            )
+            decision = (
+                result
+                if isinstance(result, TriageDecision)
+                else TriageDecision.model_validate(result)
+            )
+            mode = decision.mode
+        except Exception:
+            mode = "analysis" if has_file else "chat"
+        return {"question": question, "mode": mode}
+
+    def route_triage(self, state: AnalystState) -> Literal["analysis", "chat"]:
+        return "chat" if state.get("mode") == "chat" else "analysis"
+
+    def chat(self, state: AnalystState) -> dict[str, Any]:
+        """SQL 없이 답하는 일반 대화 — 역할·사용법·파일 목록을 컨텍스트로 준다."""
+        _emit("chatting", "일반 대화로 응답하는 중")
+        response = self.model.invoke(
+            [
+                SystemMessage(
+                    content=(
+                        "당신은 '대형 엑셀 분석 Agent'입니다 — Excel·CSV 표를 "
+                        "격리된 읽기 전용 DuckDB SQL로 집계·분석하는 데이터 분석 "
+                        "모드입니다. 지금 요청은 SQL 실행이 필요 없는 일반 대화로 "
+                        "분류되었습니다. 한국어로 간결히 답하고, 분석 방법을 물으면 "
+                        "사용법을 안내하세요: 파일을 첨부하거나 파일명을 언급해 "
+                        "질문하고, 표 위치가 애매하면 '시트명!A1:C50' 형식으로 "
+                        "범위를 지정할 수 있습니다. 이전 분석 결과에 대한 후속 "
+                        "질문이면 대화 맥락의 결과만으로 답하고, 새 계산이 필요하면 "
+                        "분석 요청으로 다시 물어봐 달라고 안내하세요.\n\n"
+                        f"[현재 볼 수 있는 파일]\n{list_workpapers.func()}"
+                    )
+                ),
+                *state["messages"],
+            ]
+        )
+        _emit("complete", "응답 완료")
+        return {"messages": [response], "error": None}
 
     def inspect_data(self, state: AnalystState) -> dict[str, Any]:
         _emit("profiling", "대상 파일과 표 범위를 찾는 중")
@@ -325,6 +411,8 @@ async def analyst(config: RunnableConfig):
     nodes = AnalystNodes(resolve_model(model_spec))
 
     builder = StateGraph(AnalystState)
+    builder.add_node("triage", nodes.triage)
+    builder.add_node("chat", nodes.chat)
     builder.add_node("inspect_data", nodes.inspect_data)
     builder.add_node("plan_sql", nodes.plan_sql)
     builder.add_node("validate_sql", nodes.validate_sql)
@@ -333,7 +421,11 @@ async def analyst(config: RunnableConfig):
     builder.add_node("answer", nodes.answer)
     builder.add_node("fail", nodes.fail)
 
-    builder.add_edge(START, "inspect_data")
+    builder.add_edge(START, "triage")
+    builder.add_conditional_edges(
+        "triage", nodes.route_triage, {"analysis": "inspect_data", "chat": "chat"}
+    )
+    builder.add_edge("chat", END)
     builder.add_conditional_edges(
         "inspect_data", nodes.route_inspect, {"plan": "plan_sql", "fail": "fail"}
     )

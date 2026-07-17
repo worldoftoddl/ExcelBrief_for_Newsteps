@@ -52,6 +52,23 @@ def test_pick_table_block_prefers_largest(table_dir):
     assert ref == "A3:C6"  # 제목(A1, 1행짜리)이 아니라 표 본체
 
 
+def test_triage_fallback_heuristic(table_dir):
+    """model=None이면 LLM 분류가 예외 → 파일 언급 유무 휴리스틱으로 폴백."""
+    nodes = AnalystNodes(model=None)
+    update = nodes.triage(
+        {"messages": [HumanMessage(content=f"[첨부 파일: {FILE}] 부서별 합계")]}
+    )
+    assert update["mode"] == "analysis"
+    assert nodes.route_triage(update) == "analysis"
+
+    update = nodes.triage({"messages": [HumanMessage(content="안녕, 뭘 할 수 있어?")]})
+    assert update["mode"] == "chat"
+    assert nodes.route_triage(update) == "chat"
+
+    update = nodes.triage({"messages": []})  # 빈 입력도 chat으로
+    assert update["mode"] == "chat"
+
+
 def test_explicit_range_with_sheet_overrides_block_pick(table_dir):
     nodes = AnalystNodes(model=None)
     update = nodes.inspect_data(
@@ -134,6 +151,23 @@ def test_validate_and_execute_without_llm(table_dir):
 
     state.update(nodes.validate_sql({"sql": "DROP TABLE data", "attempts": 2}))
     assert state["error"] and nodes.route_sql(state | {"attempts": 2}) == "fail"
+
+
+@pytest.mark.skipif(
+    not os.environ.get("ANTHROPIC_API_KEY"), reason="실 API 키 필요"
+)
+async def test_chat_branch_with_real_model(table_dir):
+    graph = await analyst(
+        {"configurable": {"model": "anthropic:claude-haiku-4-5-20251001"}}
+    )
+    result = await graph.ainvoke(
+        {"messages": [HumanMessage(content="안녕! 너는 어떤 걸 도와줄 수 있어?")]}
+    )
+    answer = result["messages"][-1]
+    text = answer.content if isinstance(answer.content, str) else str(answer.content)
+    assert text.strip()  # 오류 없이 일반 대화 응답
+    assert "오류:" not in text
+    assert result.get("sql") is None  # SQL 파이프라인을 타지 않았다
 
 
 @pytest.mark.skipif(
