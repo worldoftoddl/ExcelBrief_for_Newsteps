@@ -412,3 +412,51 @@ README로 프로젝트 소개 완결 (PRD 성공 기준 5).
       반영 확인. 테스트 누적 118개 통과
 - [x] 로컬 무스타일 화면 재발 — 이번엔 좀비가 아니라 .next에 프로덕션 빌드
       산출물(해시 CSS)이 덮인 변종. 진단 지표·복구 절차 메모리 갱신
+
+## 웹 계층·5그래프 세션 (2026-07-18) — 웹 추출/검색·기업이해·품질 다듬기
+
+- [x] 웹 추출 이식 (langgraph_web_scraping_agent → 서브그래프) — 독립
+      그래프가 아니라 agent 도구 web_extract로 노출. scraping/ 패키지
+      (SSRF 방어·바운디드 fetcher·bs4 정리·청킹) 원본 무수정 이식,
+      Playwright fallback 제외, 모델은 호출자 주입(SCRAPER_MODEL env 폐기),
+      청크 5개 상한·결과 6k자 클립 추가
+    - 함정: anthropic output_version=v1은 content가 블록 리스트 —
+      reasoning 블록(서명 포함)이 도구 결과에 직렬화되던 버그를 e2e에서
+      발견, 텍스트 블록만 취합으로 수정
+- [x] 웹 추출 Jina Reader 하이브리드 개정 — 1차 r.jina.ai(JSON 모드,
+      JS 렌더링 포함 마크다운) 50k자 클립 통짜 1회 추출, 실패 시 기존
+      httpx+bs4 경로 폴백. 청킹·병합은 Jina 경로에서 소멸. 경로 검증은
+      LangSmith 트레이스(fetch_via_jina→extract_chunks 직행)로 실측
+- [x] 조서 해설·검토 관점 강제 — 원인은 프롬프트가 아니라 스키마('왜'를
+      묻는 필드 부재). ProcedureNote에 assertion·risk_addressed, Finding에
+      assertion·risk_if_unresolved 추가 + '주장→위험→절차→증거' 렌즈
+      프롬프트 + 템플릿 태그 렌더. 엑셀/MCP 컨텍스트 분리는 이미 구현
+      상태라 불필요 판정
+- [x] profiler 기업이해 그래프 신설 (5번째) — 감사기준서 315 골격:
+      triage→plan→dart→gather→extract(웹 추출 서브그래프 재사용)→analyze
+      →cite→report(①~⑧+조사 자료+근거 목록+감사증거 아님 고지).
+      LLM ≤8회 상한, 우아한 강등 사다리(DART·검색 키·URL 중 하나만 있어도
+      동작). UI 셀렉터·예시 등록
+- [x] DART 공식 공시 백본 — dart_client.py (OpenDartReader 접근만 얇게
+      포팅: corpCode 매핑 프로세스 캐시·기업개황·주요 재무계정·최근 공시,
+      httpx·pandas 무의존). 실측: 삼성전자 연결 15계정×3개년, 웹 자료
+      (나무위키 자본금 오기)를 공시 수치로 판정하는 보고서 확인
+- [x] Tavily 웹 검색 — agent 15번째 도구 web_search(Tavily 우선·Jina
+      폴백, 키 없으면 미등록), profiler 검색 격상(최근 이슈 topic=news
+      90일, 검색 발췌 전체를 폭 보완 증거로 4k 클립 수집). s.jina.ai는
+      무키 불가(401) 실측이 설계 변경 계기
+- [x] profiler analyze 견고화 — Space 실측에서 구조화 출력이 리스트
+      필드를 '<item>…' 문자열로 내고 섹션 누락 → 2회 동일 실패. 교정
+      재시도(직전 검증 오류를 프롬프트에 주입) + 문자열 승격·빈 값 강등
+- [x] 보고서 뭉탱이 글 해소 (사용자 지적, LangSmith로 원인 확정) —
+      ① 템플릿의 들여쓴 연속 줄을 마크다운이 한 문단으로 접음 → 그래프
+      3종 템플릿을 하위 불릿 구조로 ② 약한 모델(Haiku)이 필드에 장문 →
+      스키마 설명·프롬프트에 분량 강제(주장은 명칭만·위험 한 문장·해설
+      두세 문장). 동일 조건 재실측: 섹션 분량 1/3, 요소별 제 줄
+- [x] UI — 채팅 입력창 placeholder 제거 (설정 3층 병합 함정: site.ts만
+      비우면 i18n 기본값이 다시 채움 — ko/en defaults도 함께 비움)
+- [x] 시크릿 3종 등록 — JINA_API_KEY·TAVILY_API_KEY·DART_API_KEY를 로컬
+      .env와 Space 시크릿(add_space_secret, 자동 재시작) 양쪽에.
+      셸 함정: .env는 set -a 없이 source하면 자식 프로세스에 미전달
+- [x] Space 배포 (factory rebuild ×5) — 매 단계 e2e 실측(웹 추출·검색·
+      DART·profiler 브리핑·뭉탱이 수정). 테스트 누적 180개 통과

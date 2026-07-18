@@ -134,7 +134,7 @@ ExcelBrief_for_Newsteps/
 │   ├─ prompts.py              # agent 시스템 프롬프트
 │   └─ tools/                  # excel(7종)·table(SQL 2종)·documents(docx)
 ├─ data/workpapers/            # 데모 조서·서식·CSV (배포 이미지 포함)
-├─ tests/                      # pytest 118개
+├─ tests/                      # pytest 180개
 ├─ docs/                       # 계획·현행 문서 (본 문서)
 └─ ui/                         # langgraph-chat-ui 이식 (ui/docs/ = upstream 문서)
 ```

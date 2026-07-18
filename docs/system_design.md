@@ -70,7 +70,7 @@ create_agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT,
 | 본체 LLM | explain/assess — 구조화 출력 + 소견·절차별 standards_query·source_hint 생성 | plan_sql — 구조화 SQL + revise 루프 ≤2 (validate 재검증 필수) |
 | 안전 관문 | (입력을 비LLM으로 통제) | sqlglot AST 검증 + DuckDB external_access=false |
 | 인용 | cite(LLM 없음): resolve_citation — search(top_k 3)→get_paragraph 재확인, 대상 ≤10건 병렬, 실패는 인용 생략 | 없음 |
-| 출력 | report — 결정적 템플릿(①~⑦ + 점검 범위 + 근거 목록 + 고지) | answer — LLM 해석 (SQL·대상 범위·절단 여부 병기, 토큰 스트리밍됨) |
+| 출력 | report — 결정적 템플릿(①~⑦ + 점검 범위 + 근거 목록 + 고지). 절차·소견의 주장/해설/근거는 하위 불릿 — 마크다운이 연속 줄을 한 문단으로 접는 것 방지 | answer — LLM 해석 (SQL·대상 범위·절단 여부 병기, 토큰 스트리밍됨) |
 | chat 상한 | 라운드 3·호출 4·결과 6k자 클립 | — |
 
 - 대상 파일 탐지(graph_common.find_target_file): 첨부 표기 → 정확 매칭 →
@@ -93,7 +93,9 @@ create_agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT,
   증거로 별도 수집(4k자 클립); 정독할 웹 자료 없이 공시·발췌만 있으면
   extract 생략하고 analyze 직행) → extract(웹 추출 서브그래프 재사용, 자료당 LLM 1회·결과
   5k자 클립) → analyze(구조화 CompanyProfile — DART 수치를 공식 원천으로
-  우선, 상충은 명시; 위험 후보에 영향 계정·경영진 주장 명시) →
+  우선, 상충은 명시; 위험 후보에 영향 계정·경영진 주장 명시. 견고화:
+  재시도 시 직전 검증 오류를 프롬프트에 주입하는 교정 재시도, 리스트
+  필드의 '<item>…' 문자열 승격, 섹션 누락은 빈 값 강등) →
   cite(resolve_citation 재사용, ≤8건) → report(결정적 템플릿 ①~⑧ +
   조사 자료(DART 첫 줄) + 근거 목록 + "감사증거 아님" 고지).
 - LLM 상한: triage 1 + plan 1 + extract ≤4 + analyze ≤2 = 최대 8회

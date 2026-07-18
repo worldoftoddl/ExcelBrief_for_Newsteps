@@ -1,6 +1,6 @@
 # 기술 문서 — Agent for Newstep (구 ExcelBrief for Newsteps)
 
-> 스택·의존성·환경변수·개발 규약. 2026-07-17 현행화.
+> 스택·의존성·환경변수·개발 규약. 2026-07-18 현행화.
 
 ## 1. 기술 스택
 
@@ -25,6 +25,7 @@ langchain / langgraph / langgraph-cli[inmem]
 langchain-anthropic / langchain-openai / langchain-google-genai
 langchain-mcp-adapters
 openpyxl / duckdb / sqlglot / pandas / numpy
+beautifulsoup4 / httpx            # 웹 추출 폴백 경로·Jina/Tavily/DART 호출
 python-dotenv
 pytest, pytest-asyncio      # dev
 ```
@@ -45,6 +46,9 @@ LangChain 계열은 API 변화가 잦으므로 구현 전 docs.langchain.com 실
 | `QDRANT_URL` / `QDRANT_API_KEY` | MCP stdio(로컬 옵션) 기동 시만 | 준비됨 |
 | `LOCAL_LLM_BASE_URL` | 로컬 모델 엔드포인트 | 추가 예정 |
 | `WORKPAPERS_DIR` | 조서 폴더 (기본 `data/workpapers`) | 추가 예정 |
+| `JINA_API_KEY` | (선택) 웹 추출 1차 경로·Jina 검색 폴백 | 준비됨 |
+| `TAVILY_API_KEY` | (선택) 웹 검색 1순위 (agent web_search·profiler) | 준비됨 |
+| `DART_API_KEY` | (선택) 기업이해 OpenDART 공시 수집 | 준비됨 |
 
 > ⚠️ **현재 `.env`는 구식 LangSmith 변수명(`LANGCHAIN_API_KEY`,
 > `LANGCHAIN_TRACING_V2`, `LANGCHAIN_ENDPOINT`, `LANGCHAIN_PROJECT`)을 쓰고 있다.
