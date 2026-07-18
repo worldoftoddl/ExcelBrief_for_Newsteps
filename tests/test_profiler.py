@@ -247,6 +247,46 @@ def test_analyze_failure_retries_then_fails():
     assert update["error"] and nodes.route_analyze(update) == "fail"
 
 
+def test_profile_coerces_item_tagged_string_and_missing_sections():
+    """Space 실측 실패 재현: 리스트 필드가 '<item>…' 문자열 + 나머지 섹션 누락."""
+    profile = CompanyProfile.model_validate(
+        {
+            "company_overview": "개관",
+            "industry_environment": "<item>메모리 경쟁 심화</item><item>규제 강화</item>",
+        }
+    )
+    assert profile.industry_environment == ["메모리 경쟁 심화", "규제 강화"]
+    assert profile.business_nature == []  # 누락 섹션은 빈 값 강등
+    assert profile.overall == ""
+
+
+def test_analyze_retry_includes_previous_validation_error():
+    captured = {}
+
+    class CapturingModel:
+        def with_structured_output(self, _schema):
+            def _invoke(messages):
+                captured["system"] = messages[0].content
+                return _sample_profile()
+
+            return SimpleNamespace(invoke=_invoke)
+
+    nodes = ProfilerNodes(
+        model=CapturingModel(), searcher=FakeSearcher(), scraper=FakeScraper()
+    )
+    update = nodes.analyze(
+        {
+            "company": "네이버",
+            "extracts": [{"url": "https://example.com/a", "text": "본문"}],
+            "attempts": 1,
+            "error": "프로파일 생성 실패 — 7 validation errors",
+        }
+    )
+    assert update["error"] is None
+    assert "직전 시도가 스키마 검증에 실패" in captured["system"]
+    assert "7 validation errors" in captured["system"]
+
+
 def test_profile_coerces_weak_model_strings():
     profile = CompanyProfile.model_validate(
         {

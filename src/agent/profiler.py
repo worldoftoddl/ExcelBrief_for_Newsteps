@@ -114,26 +114,49 @@ class RiskCandidate(BaseModel):
 
 
 class CompanyProfile(BaseModel):
+    """섹션 누락은 빈 값으로 강등한다 — 부분 브리핑이 전체 실패보다 낫다."""
+
     company_overview: str = Field(description="회사가 무엇을 하는 곳인지 두세 문장 개관")
     industry_environment: list[str] = Field(
-        description="산업·규제 환경 — 경쟁 구도, 규제, 거시 요인 한 줄씩"
+        default_factory=list,
+        description="산업·규제 환경 — 경쟁 구도, 규제, 거시 요인 한 줄씩",
     )
     business_nature: list[str] = Field(
-        description="사업의 성격 — 주요 제품/서비스, 수익 구조, 주요 고객·시장 한 줄씩"
+        default_factory=list,
+        description="사업의 성격 — 주요 제품/서비스, 수익 구조, 주요 고객·시장 한 줄씩",
     )
     financial_highlights: list[str] = Field(
-        description="재무 하이라이트 — 자료에서 확인된 수치·추세만, 수치에 기간 병기"
+        default_factory=list,
+        description="재무 하이라이트 — 자료에서 확인된 수치·추세만, 수치에 기간 병기",
     )
     recent_issues: list[IssueNote] = Field(
-        description="최근 이슈 — 소송·규제·경영진 변동·구조조정 등 감사 관련 사건"
+        default_factory=list,
+        description="최근 이슈 — 소송·규제·경영진 변동·구조조정 등 감사 관련 사건",
     )
     risk_candidates: list[RiskCandidate] = Field(
-        description="유의적 위험 후보 — 수집 정보가 시사하는 왜곡표시 위험"
+        default_factory=list,
+        description="유의적 위험 후보 — 수집 정보가 시사하는 왜곡표시 위험",
     )
     understanding_gaps: list[str] = Field(
-        description="공개 자료로 확인 못 한 것 — 감사팀이 추가로 확보해야 할 이해 항목"
+        default_factory=list,
+        description="공개 자료로 확인 못 한 것 — 감사팀이 추가로 확보해야 할 이해 항목",
     )
-    overall: str = Field(description="감사 착수 관점의 한눈 요약 두세 문장")
+    overall: str = Field(default="", description="감사 착수 관점의 한눈 요약 두세 문장")
+
+    @field_validator(
+        "industry_environment",
+        "business_nature",
+        "financial_highlights",
+        "understanding_gaps",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_str_list(cls, value):
+        """모델이 리스트 대신 '<item>…' 문자열을 내는 경우를 승격한다 (Space 실측)."""
+        if isinstance(value, str):
+            items = re.split(r"</?item>|\n", value)
+            return [item.strip() for item in items if item.strip()]
+        return value
 
     @field_validator("recent_issues", mode="before")
     @classmethod
@@ -650,6 +673,17 @@ class ProfilerNodes:
         ]
         evidence = "\n\n".join(parts)
         analyzer = self.model.with_structured_output(CompanyProfile)
+        # 교정 재시도: 같은 입력을 반복하면 같은 실패가 나온다 — 직전 오류를 명시
+        retry_note = (
+            (
+                "\n\n[중요] 직전 시도가 스키마 검증에 실패했습니다: "
+                f"{str(state.get('error'))[:600]}\n"
+                "모든 필드를 스키마 타입 그대로 채우세요 — 리스트 필드는 반드시 "
+                "JSON 배열이며, XML 태그나 항목 나열 문자열이 아닙니다."
+            )
+            if attempt > 1 and state.get("error")
+            else ""
+        )
         try:
             result = analyzer.invoke(
                 [
@@ -667,7 +701,7 @@ class ProfilerNodes:
                             "명시하고, 위험 평가의 근거가 될 감사기준 검색어를 "
                             "standards_query에 채우세요 (원문 확인과 인용 확정은 "
                             "시스템이 수행합니다). 공개 자료로 확인 못 한 이해 "
-                            "항목은 understanding_gaps에 남기세요."
+                            "항목은 understanding_gaps에 남기세요." + retry_note
                         )
                     ),
                     HumanMessage(
