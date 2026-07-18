@@ -32,7 +32,8 @@
 # src/agent/graph.py (개요)
 model = resolve_model(model_spec)
 tools = EXCEL_TOOLS + TABLE_TOOLS + DOCUMENT_TOOLS \
-    + [make_web_extract_tool(model)] + standards_tools  # 14종
+    + [make_web_extract_tool(model), make_web_search_tool()] \
+    + standards_tools  # 15종 (web_search는 검색 키 없으면 미등록 → 14종)
 create_agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT,
              middleware=[summarization_middleware(model, model_spec)])
 ```
@@ -53,6 +54,10 @@ create_agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT,
   상한: 폴백 청크 5개(초과분 버리고 고지)·결과 6,000자 클립·응답 2MB·
   리다이렉트 5회. 공개 http(s)만 허용 — 사설/루프백 IP는 DNS 해석 후 차단,
   리다이렉트마다 재검증 (Jina 경로도 입구에서 같은 URL 검증 통과 필요).
+- `web_search`(웹 검색, `web_search.py`)는 Tavily 우선(결과에 본문 발췌
+  포함)·Jina 검색 폴백 — 상위 5건을 [출처: URL]과 발췌로 반환(4k자 클립).
+  정독이 필요하면 모델이 그 URL을 web_extract로 잇는다. 검색 키가 둘 다
+  없으면 도구 자체가 등록되지 않고 프롬프트가 기능 없음 안내로 강등.
 
 ### 2.2 고정 파이프라인 3종 (explainer·analyst·reviewer)
 
@@ -83,9 +88,10 @@ create_agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT,
   정규식 추출) → dart(상장·공시 대상이면 OpenDART로 기업개황·주요
   재무계정 3개년·최근 90일 공시 수집 — 비LLM, `dart_client.py`,
   corpCode 매핑은 프로세스 수명 캐시) → gather(사용자 제공 URL 우선,
-  JINA_API_KEY 있으면 s.jina.ai 검색으로 보충 — 질의 3~4종, 도메인 중복
-  배제, 자료 4건 상한; 웹 자료 없이 DART만 있으면 extract 생략하고
-  analyze 직행) → extract(웹 추출 서브그래프 재사용, 자료당 LLM 1회·결과
+  검색 보충은 Tavily 우선·Jina 폴백 — 질의 3~4종(최근 이슈는 topic=news
+  90일), 정독 대상은 도메인 중복 배제·4건 상한, 검색 발췌 전체는 폭 보완
+  증거로 별도 수집(4k자 클립); 정독할 웹 자료 없이 공시·발췌만 있으면
+  extract 생략하고 analyze 직행) → extract(웹 추출 서브그래프 재사용, 자료당 LLM 1회·결과
   5k자 클립) → analyze(구조화 CompanyProfile — DART 수치를 공식 원천으로
   우선, 상충은 명시; 위험 후보에 영향 계정·경영진 주장 명시) →
   cite(resolve_citation 재사용, ≤8건) → report(결정적 템플릿 ①~⑧ +
