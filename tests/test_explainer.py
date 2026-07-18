@@ -106,7 +106,10 @@ def test_render_brief_sections_and_citation(explain_dir):
     assert "근거: 감사기준서 501 문단 A1" in out
     assert "`KSA::501::A1`" in out
     assert "**실사**: 자산을 직접 확인하는 절차" in out
-    assert "_주장: 존재성 · 대응 위험: 실재하지 않는 현금이 장부에 남는다_" in out
+    # 하위 불릿 구조 — 마크다운에서 줄이 문단으로 접히지 않아야 한다
+    assert "\n  - _주장: 존재성 · 대응 위험: 실재하지 않는 현금이 장부에 남는다_" in out
+    assert "\n  - 장부금액과 실사금액을 항목별로 비교한다" in out
+    assert "\n  - 근거: 감사기준서 501 문단 A1" in out
 
 
 def test_brief_coerces_weak_model_strings():

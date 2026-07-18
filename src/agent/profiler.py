@@ -92,13 +92,17 @@ class ProfilePlan(BaseModel):
 
 class IssueNote(BaseModel):
     issue: str = Field(description="최근 이슈 한 줄 요약")
-    detail: str = Field(description="내용과 감사 관점에서의 함의 한두 문장")
+    detail: str = Field(
+        description="내용과 감사 관점에서의 함의 — 한두 문장, 세 문장 이상 금지"
+    )
     source: str = Field(default="", description="근거가 된 자료의 URL (수집 자료 중에서)")
 
 
 class RiskCandidate(BaseModel):
     risk: str = Field(description="유의적 위험 후보 한 줄 (확정이 아니라 후보)")
-    rationale: str = Field(description="수집 정보의 어떤 사실이 이 위험을 시사하는지")
+    rationale: str = Field(
+        description="수집 정보의 어떤 사실이 이 위험을 시사하는지 — 한두 문장"
+    )
     affected_area: str = Field(
         description="영향받는 계정·거래유형과 경영진 주장 (예: '매출 — 발생사실·기간귀속')"
     )
@@ -263,10 +267,11 @@ def _render_profile(
         "## ⑤ 최근 이슈",
     ]
     if profile.recent_issues:
+        # 하위 불릿 구조 — 마크다운이 연속 줄을 한 문단으로 접는 것을 막는다
         for note in profile.recent_issues:
-            line = f"- **{note.issue}**\n  {note.detail}"
+            line = f"- **{note.issue}**\n  - {note.detail}"
             if note.source:
-                line += f"\n  출처: {note.source}"
+                line += f"\n  - 출처: {note.source}"
             lines.append(line)
     else:
         lines.append("- (확인된 내용 없음)")
@@ -277,10 +282,10 @@ def _render_profile(
     if profile.risk_candidates:
         for risk in profile.risk_candidates:
             line = (
-                f"- **{risk.risk}**\n  _영향: {risk.affected_area}_\n  {risk.rationale}"
+                f"- **{risk.risk}**\n  - _영향: {risk.affected_area}_\n  - {risk.rationale}"
             )
             if risk.citation:
-                line += f"\n  근거: {risk.citation}"
+                line += f"\n  - 근거: {risk.citation}"
             lines.append(line)
     else:
         lines.append("- (확인된 내용 없음)")

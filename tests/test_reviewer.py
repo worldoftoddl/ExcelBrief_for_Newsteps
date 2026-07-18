@@ -150,7 +150,9 @@ def test_render_report_sections_and_severity_order():
     assert out.index("높음건") < out.index("낮음건")  # 심각도 정렬
     assert "- (해당 없음)" in out  # 빈 섹션 표기
     assert "기계 수집 증거" in out  # 한계 고지
-    assert "_주장: 완전성 · 미해결 시 위험: 누락된 부채가 계상되지 않은 채 남는다_" in out
+    # 하위 불릿 구조 — 마크다운에서 줄이 문단으로 접히지 않아야 한다
+    assert "\n  - _주장: 완전성 · 미해결 시 위험: 누락된 부채가 계상되지 않은 채 남는다_" in out
+    assert "\n  - d" in out  # detail도 제 줄을 갖는다
 
 
 class _StubInvestigateModel:

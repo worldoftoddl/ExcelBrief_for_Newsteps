@@ -97,20 +97,24 @@ class Finding(BaseModel):
             "메모(D6)', '5400 Lead 시트의 대손충당금 행(B8)'"
         )
     )
-    detail: str = Field(description="무엇이 왜 문제/필요한지 신입 회계사가 이해할 설명")
+    detail: str = Field(
+        description="무엇이 왜 문제/필요한지 신입 회계사가 이해할 설명 — 두세 문장으로 간결히"
+    )
     assertion: str = Field(
         default="",
         description=(
-            "이 소견과 관련된 경영진 주장 — 존재성·완전성·평가와 배분(정확성)·"
-            "권리와 의무·발생사실·기간귀속·표시와 공시 중 해당하는 것 "
-            "(여러 개면 쉼표 구분). 주장과 무관한 형식적 소견이면 빈 문자열"
+            "이 소견과 관련된 경영진 주장의 명칭만 — 존재성·완전성·평가와 배분"
+            "(정확성)·권리와 의무·발생사실·기간귀속·표시와 공시 중에서 (여러 "
+            "개면 쉼표 구분, 예: '완전성'). 문장으로 쓰지 말 것. 주장과 무관한 "
+            "형식적 소견이면 빈 문자열"
         ),
     )
     risk_if_unresolved: str = Field(
         default="",
         description=(
-            "이 소견이 해결되지 않으면 어떤 왜곡표시 위험이 남는지 한 줄 "
-            "(예: '회수 불확실한 채권이 과대계상된 채 남는다')"
+            "이 소견이 해결되지 않으면 어떤 왜곡표시 위험이 남는지 — 40자 내외 "
+            "한 문장 (예: '회수 불확실한 채권이 과대계상된 채 남는다'). 두 문장 "
+            "이상 금지"
         ),
     )
     standards_query: str = Field(
@@ -184,6 +188,7 @@ def _render_report(
             return ["- (해당 없음)"]
         order = {"높음": 0, "중간": 1, "낮음": 2}
         lines = []
+        # 하위 불릿 구조 — 마크다운이 연속 줄을 한 문단으로 접는 것을 막는다
         for f in sorted(items, key=lambda f: order[f.severity]):
             line = f"- [{f.severity}] {f.title} ({f.location})"
             tags = " · ".join(
@@ -199,10 +204,10 @@ def _render_report(
                 if t
             )
             if tags:
-                line += f"\n  _{tags}_"
-            line += f"\n  {f.detail}"
+                line += f"\n  - _{tags}_"
+            line += f"\n  - {f.detail}"
             if f.citation:
-                line += f"\n  근거: {f.citation}"
+                line += f"\n  - 근거: {f.citation}"
             lines.append(line)
         return lines
 
@@ -539,6 +544,9 @@ class ReviewerNodes:
                             "risk_if_unresolved(미해결 시 남는 왜곡표시 위험)를 채워 "
                             "'무엇이 빠졌다'가 아니라 '어떤 주장이 입증되지 않은 채 "
                             "남는가'로 평가하고, 심각도는 그 위험의 크기로 매기세요. "
+                            "분량을 지키세요 — assertion은 주장 명칭만, "
+                            "risk_if_unresolved는 한 문장, detail은 두세 문장. "
+                            "길게 쓰면 보고서가 읽히지 않습니다. "
                             "기준서 번호를 "
                             "본문에 직접 인용하지 말고, 기준서 근거가 필요한 소견에는 "
                             "standards_query(한국어 검색어)와 source_hint를 채우세요 — "

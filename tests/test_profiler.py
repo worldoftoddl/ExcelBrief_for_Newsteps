@@ -109,7 +109,9 @@ def test_render_profile_sections_and_citation():
     ):
         assert section in out
     assert "요청 초점: 최근 소송" in out
-    assert "_영향: 충당부채 — 완전성·평가_" in out
+    # 하위 불릿 구조 — 마크다운에서 줄이 문단으로 접히지 않아야 한다
+    assert "\n  - _영향: 충당부채 — 완전성·평가_" in out
+    assert "\n  - 출처: https://news.example.com/a1" in out
     assert "근거: 감사기준서 501 문단 9" in out
     assert "`KSA::501::9`" in out
     assert "감사증거가 아닙니다" in out

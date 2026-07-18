@@ -92,21 +92,25 @@ class ProcedureNote(BaseModel):
         )
     )
     interpretation: str = Field(
-        description="이 절차를 왜 하는지, 조서에서 어떻게 수행됐는지 신입 눈높이 해설"
+        description=(
+            "이 절차를 왜 하는지, 조서에서 어떻게 수행됐는지 신입 눈높이 해설 "
+            "— 두세 문장으로 간결히"
+        )
     )
     assertion: str = Field(
         default="",
         description=(
-            "이 절차가 다루는 경영진 주장 — 존재성·완전성·평가와 배분(정확성)·"
-            "권리와 의무·발생사실·기간귀속·표시와 공시 중 해당하는 것 "
-            "(여러 개면 쉼표 구분). 주장과 무관한 서식 안내면 빈 문자열"
+            "이 절차가 다루는 경영진 주장의 명칭만 — 존재성·완전성·평가와 배분"
+            "(정확성)·권리와 의무·발생사실·기간귀속·표시와 공시 중에서 (여러 "
+            "개면 쉼표 구분, 예: '존재성, 평가'). 문장으로 쓰지 말 것. 주장과 "
+            "무관한 서식 안내면 빈 문자열"
         ),
     )
     risk_addressed: str = Field(
         default="",
         description=(
-            "이 절차가 없으면 무엇이 잘못될 수 있는지 — 대응하는 왜곡표시 위험 "
-            "한 줄 (예: '실재하지 않는 매출채권이 장부에 남는다')"
+            "이 절차가 없으면 무엇이 잘못될 수 있는지 — 40자 내외 한 문장 "
+            "(예: '실재하지 않는 매출채권이 장부에 남는다'). 두 문장 이상 금지"
         ),
     )
     standards_query: str = Field(
@@ -212,6 +216,7 @@ def _render_brief(
         "## ③ 수행된 절차 해설",
     ]
     if brief.performed_procedures:
+        # 하위 불릿 구조 — 마크다운이 연속 줄을 한 문단으로 접는 것을 막는다
         for note in brief.performed_procedures:
             line = f"- **{note.procedure}** ({note.location})"
             tags = " · ".join(
@@ -223,10 +228,10 @@ def _render_brief(
                 if t
             )
             if tags:
-                line += f"\n  _{tags}_"
-            line += f"\n  {note.interpretation}"
+                line += f"\n  - _{tags}_"
+            line += f"\n  - {note.interpretation}"
             if note.citation:
-                line += f"\n  근거: {note.citation}"
+                line += f"\n  - 근거: {note.citation}"
             lines.append(line)
     else:
         lines.append("- (해당 없음)")
@@ -535,7 +540,9 @@ class ExplainerNodes:
                             "있는지를 채우고, interpretation은 그 주장·위험과 "
                             "연결해 서술하세요. 관찰 나열('B5에 합계가 있다')이 "
                             "아니라 목적 설명('매출채권의 실재성을 확인하기 위해 "
-                            "…')이 되어야 합니다. 기준서 "
+                            "…')이 되어야 합니다. 분량을 지키세요 — assertion은 "
+                            "주장 명칭만, risk_addressed는 한 문장, interpretation은 "
+                            "두세 문장. 길게 쓰면 보고서가 읽히지 않습니다. 기준서 "
                             "번호를 본문에 직접 인용하지 말고, 근거가 필요한 "
                             "절차에는 standards_query(한국어 검색어)와 source_hint를 "
                             "채우세요 — 원문 확인과 인용 확정은 시스템이 수행합니다."
