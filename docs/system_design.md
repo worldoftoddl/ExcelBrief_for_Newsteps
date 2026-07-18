@@ -87,7 +87,9 @@ create_agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT,
 - 흐름: triage(브리핑/대화) → plan(LLM이 회사명·초점 파싱, URL은 코드
   정규식 추출) → dart(상장·공시 대상이면 OpenDART로 기업개황·주요
   재무계정 3개년·최근 90일 공시 수집 — 비LLM, `dart_client.py`,
-  corpCode 매핑은 프로세스 수명 캐시) → gather(사용자 제공 URL 우선,
+  corpCode 매핑은 프로세스 수명 캐시. 법인 확정은 종목코드·정확 일치만
+  자동 — 부분 일치나 동명 함정('삼성'이라는 비상장 법인 실존)은 공시를
+  생략하고 보고서에 후보·구체화 안내를 렌더) → gather(사용자 제공 URL 우선,
   검색 보충은 Tavily 우선·Jina 폴백 — 질의 3~4종(최근 이슈는 topic=news
   90일), 정독 대상은 도메인 중복 배제·4건 상한, 검색 발췌 전체는 폭 보완
   증거로 별도 수집(4k자 클립); 정독할 웹 자료 없이 공시·발췌만 있으면

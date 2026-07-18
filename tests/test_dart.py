@@ -21,6 +21,8 @@ def _corp_zip() -> bytes:
         "<stock_code></stock_code></list>"
         "<list><corp_code>00888888</corp_code><corp_name>(주)가나다</corp_name>"
         "<stock_code></stock_code></list>"
+        "<list><corp_code>00777777</corp_code><corp_name>삼성</corp_name>"
+        "<stock_code></stock_code></list>"
         "</result>"
     )
     buffer = io.BytesIO()
@@ -69,10 +71,22 @@ def test_find_corp_prefers_exact_and_listed():
     corp = client.find_corp("삼성전자")
     assert corp.corp_code == "00126380" and corp.listed
 
-    # 부분 일치 폴백 + 법인 접두어 흡수
+    # 정확 일치 + 법인 접두어 흡수만 자동 확정
     assert client.find_corp("삼성전자서비스").corp_code == "00999999"
     assert client.find_corp("가나다").corp_code == "00888888"
     assert client.find_corp("없는회사") is None
+    # 종목코드 6자리는 그것으로 확정
+    assert client.find_corp("005930").corp_code == "00126380"
+    assert client.find_corp("삼성전자(005930)").corp_code == "00126380"
+    # 부분 일치는 자동 선택 금지 — 엉뚱한 법인이 공식 원천을 오염시킴
+    assert client.find_corp("삼성전") is None
+    candidates = client.find_candidates("삼성전")
+    assert [c.corp_code for c in candidates] == ["00126380", "00999999"]  # 상장 우선
+    # 동명 함정: '삼성'이라는 비상장 법인이 정확 일치해도, 그 이름을 포함하는
+    # 상장사(삼성전자)가 있으면 자동 확정하지 않는다 (DART 실데이터 재현)
+    assert client.find_corp("삼성") is None
+    # 비상장 정확 일치라도 상위 상장사가 없으면 그대로 확정 (삼성전자서비스)
+    assert client.find_corp("삼성전자서비스").corp_code == "00999999"
     assert calls["count"] == 1  # corpCode ZIP은 1회만 (프로세스 캐시)
 
 
@@ -136,9 +150,10 @@ def test_format_dart_evidence_renders_sections():
 
 
 class FakeDart:
-    def __init__(self, available=True, corp=None, fail=False):
+    def __init__(self, available=True, corp=None, candidates=None, fail=False):
         self._available = available
         self.corp = corp
+        self.candidates = candidates or []
         self.fail = fail
 
     @property
@@ -149,6 +164,9 @@ class FakeDart:
         if self.fail:
             raise ValueError("network down")
         return self.corp
+
+    def find_candidates(self, name, limit=5):
+        return self.candidates[:limit]
 
     def company(self, corp_code):
         return {"corp_name": "삼성전자", "corp_cls": "Y", "stock_code": "005930"}
@@ -188,6 +206,30 @@ def test_dart_node_skips_when_unavailable_or_unknown():
 
     nodes = _nodes(FakeDart(fail=True))  # 예외도 브리핑을 중단시키지 않는다
     assert nodes.dart_fetch({"company": "삼성전자"}) == {}
+
+
+def test_dart_node_ambiguous_name_skips_with_notice():
+    from agent.dart_client import DartCorp
+    from agent.profiler import CompanyProfile, _render_profile
+
+    nodes = _nodes(
+        FakeDart(
+            corp=None,
+            candidates=[
+                DartCorp("00126380", "삼성전자", "005930"),
+                DartCorp("00999999", "삼성전자서비스", ""),
+            ],
+        )
+    )
+    update = nodes.dart_fetch({"company": "삼성"})
+    assert "dart_evidence" not in update  # 공시 미반영
+    assert "삼성전자(005930)" in update["dart_notice"]
+    assert "종목코드" in update["dart_notice"]
+
+    # 안내문이 보고서에 렌더된다
+    profile = CompanyProfile(company_overview="o", overall="s")
+    out = _render_profile("삼성", profile, [], dart_notice=update["dart_notice"])
+    assert "> '삼성' 명칭이 여러 DART 법인과 겹쳐" in out
 
 
 def test_gather_proceeds_to_analyze_with_dart_only():

@@ -17,6 +17,7 @@ DART_API_KEY(opendart.fss.or.kr 무료 발급)가 없으면 available=False —
 import io
 import json
 import os
+import re
 import zipfile
 from dataclasses import dataclass
 from xml.etree import ElementTree
@@ -91,23 +92,51 @@ class DartClient:
         return corps
 
     def find_corp(self, name: str) -> DartCorp | None:
-        """회사명으로 corp를 찾는다 — 정확 일치 우선, 상장사 우선."""
+        """종목코드 또는 정확 일치만 자동 확정한다 — 부분 일치 자동 선택 금지.
+
+        '삼성'·'한화' 같은 모호한 이름이 엉뚱한 법인으로 이어지면 공식
+        원천인 공시가 브리핑 전체를 오염시킨다. 부분 일치는 나열 전용인
+        find_candidates 몫이고, 호출자는 후보를 사용자에게 안내해야 한다.
+        """
         query = name.strip()
         if not query:
             return None
         corps = self._corp_list()
+        # 종목코드 6자리가 있으면 그것으로 확정 (예: '삼성전자(005930)')
+        code = re.search(r"(?<!\d)(\d{6})(?!\d)", query)
+        if code:
+            for corp in corps:
+                if corp.stock_code == code.group(1):
+                    return corp
         exact = [c for c in corps if c.corp_name == query]
         if not exact:
             # 법인 접두어 차이 흡수: '(주)삼성전자' ↔ '삼성전자'
             exact = [c for c in corps if c.corp_name.replace("(주)", "") == query]
         if exact:
-            return next((c for c in exact if c.listed), exact[0])
-        partial = [c for c in corps if query in c.corp_name]
-        if not partial:
-            return None
-        # 상장 여부 → 이름 길이(가장 가까운 이름) 순
+            best = next((c for c in exact if c.listed), exact[0])
+            if best.listed:
+                return best
+            # 동명 함정: DART에는 '삼성' 같은 이름의 무명 비상장 법인이
+            # 실존한다 — 그 이름을 포함하는 상장사가 따로 있으면 사용자가
+            # 그 상장사를 뜻했을 가능성이 높으므로 자동 확정하지 않는다
+            listed_supersets = [
+                c
+                for c in corps
+                if c.listed and query in c.corp_name and c.corp_name != query
+            ]
+            if listed_supersets:
+                return None
+            return best
+        return None
+
+    def find_candidates(self, name: str, limit: int = 5) -> list[DartCorp]:
+        """부분 일치 후보 나열 — 상장 우선·이름 짧은 순. 자동 선택용이 아니다."""
+        query = name.strip()
+        if not query:
+            return []
+        partial = [c for c in self._corp_list() if query in c.corp_name]
         partial.sort(key=lambda c: (not c.listed, len(c.corp_name)))
-        return partial[0]
+        return partial[:limit]
 
     # ── 공시 데이터 ──────────────────────────────────────────────────────
     def company(self, corp_code: str) -> dict:

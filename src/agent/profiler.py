@@ -195,6 +195,7 @@ class ProfilerState(TypedDict, total=False):
     provided_urls: list  # 사용자가 메시지에 적은 URL
     dart_evidence: str  # DART 공시 요약 (상장·공시 대상 기업일 때)
     dart_source: dict  # 조사 자료 목록에 표기할 DART 출처
+    dart_notice: str  # 모호한 회사명으로 공시를 생략했을 때의 사용자 안내
     search_snippets: str  # 검색 결과 발췌 — 정독 안 한 자료의 폭 보완
     sources: list  # [{"url", "title"}] 웹 추출 대상으로 확정된 자료
     extracts: list  # [{"url", "text"}] 자료별 추출 결과
@@ -244,6 +245,7 @@ def _render_profile(
     profile: CompanyProfile,
     sources: list[dict],
     focus: str = "",
+    dart_notice: str = "",
 ) -> str:
     def _bullets(items: list[str]) -> list[str]:
         return [f"- {item}" for item in items] or ["- (확인된 내용 없음)"]
@@ -307,6 +309,8 @@ def _render_profile(
         ),
         "",
     ]
+    if dart_notice:
+        lines += [f"> {dart_notice}", ""]
     cited = [r for r in profile.risk_candidates if r.citation_cid]
     if cited:
         seen: set[str] = set()
@@ -520,7 +524,24 @@ class ProfilerNodes:
         try:
             corp = self.dart.find_corp(company)
             if corp is None:
-                return {}
+                # 부분 일치를 자동 선택하면 엉뚱한 법인의 공시가 브리핑을
+                # 오염시킨다 — 생략하고 사용자에게 구체화를 안내한다
+                candidates = self.dart.find_candidates(company)
+                if not candidates:
+                    return {}
+                names = ", ".join(
+                    c.corp_name + (f"({c.stock_code})" if c.listed else "")
+                    for c in candidates[:3]
+                )
+                emit("dart", f"'{company}' 정확 일치 법인 없음 — DART 공시 생략")
+                return {
+                    "dart_notice": (
+                        f"'{company}' 명칭이 여러 DART 법인과 겹쳐 공시 데이터를 "
+                        f"반영하지 않았습니다. 후보: {names}. 정확한 법인명이나 "
+                        "종목코드 6자리로 다시 요청하면 공식 공시(재무제표·최근 "
+                        "공시)를 반영합니다."
+                    )
+                }
             label = corp.corp_name + (f"({corp.stock_code})" if corp.listed else "")
             emit("dart", f"DART 공시 수집 중: {label}")
             info = self.dart.company(corp.corp_code)
@@ -773,6 +794,7 @@ class ProfilerNodes:
             profile,
             sources,
             state.get("focus", ""),
+            state.get("dart_notice", ""),
         )
         emit("complete", "기업이해 브리핑 완료")
         return {"messages": [AIMessage(content=text)], "error": None}
