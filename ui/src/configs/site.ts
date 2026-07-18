@@ -16,8 +16,7 @@ export const siteConfig = {
   buttons: {
     enableFileUpload: true,
     fileUploadMode: "base64" as const,
-    chatInputPlaceholder:
-      "조서나 감사기준에 대해 물어보세요. (예: 3650 조서는 어떤 절차를 위한 서식이야?)",
+    chatInputPlaceholder: "",
   },
   threads: {
     showHistory: true,
