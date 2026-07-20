@@ -43,6 +43,36 @@ export const authConfig: NextAuthConfig = {
     signIn: "/login",
     verifyRequest: "/verify-request", // For email magic link
   },
+  // HF Space는 huggingface.co 안의 cross-site iframe이라 SameSite=Lax인
+  // NextAuth 기본 쿠키(세션·CSRF·콜백)가 요청에 실리지 않는다 — 선호 쿠키
+  // (crossSiteCookieAttributes)와 같은 이유로 production에서 None+Secure.
+  cookies:
+    process.env.NODE_ENV === "production"
+      ? {
+          sessionToken: {
+            name: "__Secure-authjs.session-token",
+            options: {
+              httpOnly: true,
+              sameSite: "none",
+              secure: true,
+              path: "/",
+            },
+          },
+          callbackUrl: {
+            name: "__Secure-authjs.callback-url",
+            options: { sameSite: "none", secure: true, path: "/" },
+          },
+          csrfToken: {
+            name: "__Host-authjs.csrf-token",
+            options: {
+              httpOnly: true,
+              sameSite: "none",
+              secure: true,
+              path: "/",
+            },
+          },
+        }
+      : undefined,
   trustHost: true,
   providers: usesNextAuth() ? getAuthProviders() : [],
   callbacks: {

@@ -20,4 +20,9 @@ else:
     raise SystemExit("langgraph 서버가 120초 내에 준비되지 않음")
 EOF
 
+# credentials 모드: 시드 계정 upsert (Space 파일시스템은 휘발성 — 매 기동마다)
+if [ "${AUTH_MODE:-standalone}" = "credentials" ] && [ -n "${DATABASE_URL:-}" ]; then
+    (cd ui && node scripts/seed-users.mjs)
+fi
+
 exec node ui/server.js
