@@ -15,7 +15,7 @@
 말미에 근거 목록(표기 + cid)을 붙인다. 고정 그래프는 검색어 생성만 LLM이
 하고 검색·재확인·인용 확정은 코드가 결정적으로 수행한다.
 
-> **데모 링크**: [HuggingFace Space]([https://huggingface.co/spaces/toddl/excelbrief](https://toddl-excelbrief.hf.space/)) —
+> **데모 링크**: [HuggingFace Space](https://toddl-excelbrief.hf.space/) —
 > 링크 하나로 바로 체험 (번들 데이터는 전부 가상 샘플 조서·한공회 공식 빈 서식)
 
 ## 아키텍처
