@@ -7,7 +7,7 @@ export const siteConfig = {
   },
   branding: {
     appName: "Agent for Newstep",
-    logoPath: "/logo.png",
+    logoPath: "/logo.svg",
     logoWidth: 28,
     logoHeight: 28,
     description:

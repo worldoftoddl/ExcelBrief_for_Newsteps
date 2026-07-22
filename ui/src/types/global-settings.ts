@@ -91,7 +91,7 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
 
   // Branding
   "branding.appTitle": "Agent for Newstep",
-  "branding.logoUrl": "/logo.png",
+  "branding.logoUrl": "/logo.svg",
   "branding.faviconUrl": "/favicon.svg",
 };
 
