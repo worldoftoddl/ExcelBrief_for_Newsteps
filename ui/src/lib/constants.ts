@@ -41,7 +41,10 @@ export const TIMING = {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const STREAM_OPTIONS: any = {
-  streamMode: ["values", "updates", "custom"],
+  // messages-tuple: LLM 토큰 스트리밍 — 최종 노드(agent 답변·chat 노드)의
+  // 답변이 토큰 단위로 흐른다. 중간 노드 토큰은 MessageList의
+  // isIntermediateNodeMessage가 streamMetadata.langgraph_node로 걸러낸다.
+  streamMode: ["values", "updates", "custom", "messages-tuple"],
   streamSubgraphs: true,
   streamResumable: true,
 };
