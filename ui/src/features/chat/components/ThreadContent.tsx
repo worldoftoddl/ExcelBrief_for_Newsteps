@@ -112,6 +112,7 @@ export function ThreadContent() {
   const messages = stream.messages;
   const isLoading = stream.isLoading;
   const nodeUpdates = stream.nodeUpdates;
+  const progressEvents = stream.progressEvents;
   const updateNodeCompletedOutput = stream.updateNodeCompletedOutput;
   const messageNodeMap = stream.messageNodeMap;
   const {
@@ -184,6 +185,7 @@ export function ThreadContent() {
     activityItems,
   } = useStreamingView(allRuns, isLoading, messages, {
     nodeUpdates,
+    progressEvents,
     finalNodeNames,
     updateNodeCompletedOutput,
     getMessagesMetadata: stream.getMessagesMetadata,

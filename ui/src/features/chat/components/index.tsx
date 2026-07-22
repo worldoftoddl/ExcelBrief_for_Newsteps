@@ -103,6 +103,7 @@ export function Thread() {
   const messages = stream.messages;
   const isLoading = stream.isLoading;
   const nodeUpdates = stream.nodeUpdates;
+  const progressEvents = stream.progressEvents;
   const updateNodeCompletedOutput = stream.updateNodeCompletedOutput;
   const {
     assistantId: currentAssistantId,
@@ -148,6 +149,7 @@ export function Thread() {
     activityItems,
   } = useStreamingView(allRuns, isLoading, messages, {
     nodeUpdates,
+    progressEvents,
     finalNodeNames,
     updateNodeCompletedOutput,
     stateTodos: stream.values?.todos,

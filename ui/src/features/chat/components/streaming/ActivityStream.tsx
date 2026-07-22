@@ -23,6 +23,7 @@ import type {
   ToolCallActivity,
   SubgraphActivity,
   LLMOutputActivity,
+  ProgressActivity,
   LangSmithEnrichment,
   TaskChildNode,
 } from "@/types/task-progress";
@@ -611,6 +612,67 @@ const LLMOutputRow = memo(
 );
 
 // ============================================
+// ProgressRow — 그래프 진행 이벤트 ({stage, message}) 한 줄
+// ============================================
+
+/** details에서 표시할 만한 진행 수치(current/total, attempt 등)를 짧은 배지로 */
+function progressDetailBadge(
+  details: Record<string, unknown> | undefined,
+): string {
+  if (!details) return "";
+  const parts: string[] = [];
+  if (
+    typeof details.current === "number" &&
+    typeof details.total === "number"
+  ) {
+    parts.push(`${details.current}/${details.total}`);
+  } else if (typeof details.total === "number") {
+    parts.push(`${details.total}`);
+  }
+  if (typeof details.attempt === "number" && details.attempt > 1) {
+    parts.push(`재시도 ${details.attempt}`);
+  }
+  return parts.join(" · ");
+}
+
+const ProgressRow = memo(
+  function ProgressRow({ item }: { item: ProgressActivity }) {
+    const badge = progressDetailBadge(item.details);
+    return (
+      <div
+        className="flex items-center gap-2 px-3 py-1.5 text-sm"
+        data-activity-item
+        data-depth="0"
+        data-kind="progress"
+        data-status={item.status}
+      >
+        <StatusIcon status={item.status} />
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate text-xs",
+            item.status === "streaming"
+              ? "text-foreground"
+              : "text-muted-foreground",
+          )}
+        >
+          {item.message}
+        </span>
+        {badge && (
+          <span className="text-muted-foreground/60 flex-shrink-0 text-[10px]">
+            {badge}
+          </span>
+        )}
+      </div>
+    );
+  },
+  (prev, next) =>
+    prev.item.id === next.item.id &&
+    prev.item.status === next.item.status &&
+    prev.item.message === next.item.message &&
+    JSON.stringify(prev.item.details) === JSON.stringify(next.item.details),
+);
+
+// ============================================
 // Main ActivityStream Component
 // ============================================
 
@@ -743,6 +805,13 @@ export const ActivityStream = memo(function ActivityStream({
                   case "llm_output":
                     return (
                       <LLMOutputRow
+                        key={item.id}
+                        item={item}
+                      />
+                    );
+                  case "progress":
+                    return (
+                      <ProgressRow
                         key={item.id}
                         item={item}
                       />

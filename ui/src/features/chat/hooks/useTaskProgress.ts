@@ -22,8 +22,9 @@ import type {
   ToolCallActivity,
   SubgraphActivity,
   LLMOutputActivity,
+  ProgressActivity,
 } from "@/types/task-progress";
-import type { NodeUpdateInfo } from "./utils";
+import type { NodeUpdateInfo, ProgressEventInfo } from "./utils";
 
 // ============================================
 // Types
@@ -45,6 +46,8 @@ interface LangGraphMessage {
 interface UseTaskProgressOptions {
   messages: unknown[];
   nodeUpdates?: NodeUpdateInfo[];
+  /** custom 스트림의 {stage, message} 진행 이벤트 (Stream context) */
+  progressEvents?: ProgressEventInfo[];
   isStreaming: boolean;
   finalNodeNames?: string[];
   /** Map of message ID → node name (from Stream context) */
@@ -1250,12 +1253,38 @@ function buildActivityItems(
 // Main Hook
 // ============================================
 
+/** 진행 이벤트({stage, message})를 ProgressActivity 항목으로 변환 */
+function buildProgressItems(
+  progressEvents: ProgressEventInfo[],
+  isStreaming: boolean,
+): ProgressActivity[] {
+  return progressEvents.map((event, index) => {
+    const isLast = index === progressEvents.length - 1;
+    const isTerminal = event.stage === "complete" || event.stage === "failed";
+    return {
+      id: `progress-${index}-${event.stage}`,
+      kind: "progress" as const,
+      timestamp: event.timestamp,
+      status:
+        event.stage === "failed"
+          ? ("error" as const)
+          : isLast && isStreaming && !isTerminal
+            ? ("streaming" as const)
+            : ("completed" as const),
+      stage: event.stage,
+      message: event.message,
+      details: event.details,
+    };
+  });
+}
+
 export function useTaskProgress(
   options: UseTaskProgressOptions,
 ): UseTaskProgressReturn {
   const {
     messages,
     nodeUpdates,
+    progressEvents,
     isStreaming,
     finalNodeNames,
     messageNodeMap,
@@ -1328,18 +1357,28 @@ export function useTaskProgress(
   // Calculate lifecycle
   const lifecycle = useMemo(() => calculateLifecycle(progress), [progress]);
 
-  // Build unified activity items
-  const activityItems = useMemo(
-    () =>
-      buildActivityItems(
-        nodeUpdates,
-        typedMessages,
-        isStreaming,
-        finalNodeNames ?? [],
-        messageNodeMap,
-      ),
-    [nodeUpdates, typedMessages, isStreaming, finalNodeNames, messageNodeMap],
-  );
+  // Build unified activity items (+ custom 스트림 진행 이벤트를 시간순 병합)
+  const activityItems = useMemo(() => {
+    const base = buildActivityItems(
+      nodeUpdates,
+      typedMessages,
+      isStreaming,
+      finalNodeNames ?? [],
+      messageNodeMap,
+    );
+    const progressItems = buildProgressItems(progressEvents ?? [], isStreaming);
+    if (progressItems.length === 0) return base;
+    return [...base, ...progressItems].sort(
+      (a, b) => a.timestamp - b.timestamp,
+    );
+  }, [
+    nodeUpdates,
+    progressEvents,
+    typedMessages,
+    isStreaming,
+    finalNodeNames,
+    messageNodeMap,
+  ]);
 
   // Check if there's content to display
   const hasContent = progress.length > 0 || streamingOutput !== null;

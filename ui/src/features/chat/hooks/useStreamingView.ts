@@ -15,7 +15,7 @@ import type { HierarchicalTask } from "@/types/task-hierarchy";
 import type { TaskProgressItem, ActivityItem } from "@/types/task-progress";
 import { useTaskProgress } from "./useTaskProgress";
 import { useLangSmithEnrichment } from "./useLangSmithEnrichment";
-import type { NodeUpdateInfo } from "./utils";
+import type { NodeUpdateInfo, ProgressEventInfo } from "./utils";
 
 // Re-export types for consumers
 export type { TaskProgressItem };
@@ -34,6 +34,8 @@ interface UseStreamingViewOptions {
   defaultShowCompletedDetails?: boolean;
   defaultExpandDepth?: number;
   nodeUpdates?: NodeUpdateInfo[];
+  /** custom 스트림의 {stage, message} 진행 이벤트 (Stream context) */
+  progressEvents?: ProgressEventInfo[];
   finalNodeNames?: string[];
   updateNodeCompletedOutput?: (nodeName: string, output: string) => void;
   /** Function to get message metadata (for extracting langgraph_node) */
@@ -72,6 +74,7 @@ export function useStreamingView(
 ): UseStreamingViewReturn {
   const {
     nodeUpdates,
+    progressEvents,
     finalNodeNames = [],
     messageNodeMap,
     stateTodos,
@@ -108,6 +111,7 @@ export function useStreamingView(
   } = useTaskProgress({
     messages: currentTurnMessages,
     nodeUpdates,
+    progressEvents,
     isStreaming,
     finalNodeNames,
     messageNodeMap,

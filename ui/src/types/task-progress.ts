@@ -128,7 +128,11 @@ export interface StreamingOutput {
 // ActivityItem Types (Unified Activity Stream)
 // ============================================
 
-export type ActivityItemKind = "tool_call" | "subgraph" | "llm_output";
+export type ActivityItemKind =
+  | "tool_call"
+  | "subgraph"
+  | "llm_output"
+  | "progress";
 
 interface ActivityItemBase {
   id: string;
@@ -166,10 +170,19 @@ export interface LLMOutputActivity extends ActivityItemBase {
   fullOutput: string;
 }
 
+/** 그래프가 custom 스트림으로 쏘는 진행 이벤트 ({stage, message}) 한 줄 */
+export interface ProgressActivity extends ActivityItemBase {
+  kind: "progress";
+  stage: string;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
 export type ActivityItem =
   | ToolCallActivity
   | SubgraphActivity
-  | LLMOutputActivity;
+  | LLMOutputActivity
+  | ProgressActivity;
 
 // ============================================
 // Hook Return Types

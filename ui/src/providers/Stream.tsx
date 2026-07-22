@@ -38,6 +38,14 @@ export type StateType = {
   [key: string]: unknown; // Allow dynamic fields from input_schema
 };
 
+// 그래프가 custom 스트림으로 쏘는 진행 이벤트 (graph_common.emit의 {stage, message})
+export interface ProgressEventInfo {
+  stage: string;
+  message: string;
+  timestamp: number;
+  details?: Record<string, unknown>;
+}
+
 // 노드별 업데이트 정보 (스트리밍 이벤트에서 추출)
 export interface NodeUpdateInfo {
   nodeName: string; // 노드 이름 (이벤트에서 추출)
@@ -77,6 +85,8 @@ const useTypedStream = useStream<
 // 누락되는 SDK 속성을 명시적으로 추가합니다.
 export type StreamContextType = ReturnType<typeof useTypedStream> & {
   nodeUpdates: NodeUpdateInfo[];
+  /** custom 스트림의 {stage, message} 진행 이벤트 (시간순) */
+  progressEvents: ProgressEventInfo[];
   clearNodeUpdates: () => void;
   deactivateAllNodes: () => void;
   updateNodeCompletedOutput: (nodeName: string, output: string) => void;
@@ -143,6 +153,10 @@ const StreamSession = ({
   const [nodeUpdates, setNodeUpdates] = useState<NodeUpdateInfo[]>([]);
   const nodeUpdatesRef = useRef<NodeUpdateInfo[]>([]);
 
+  // 진행 이벤트 추적 (custom 스트림의 {stage, message})
+  const [progressEvents, setProgressEvents] = useState<ProgressEventInfo[]>([]);
+  const progressEventsRef = useRef<ProgressEventInfo[]>([]);
+
   // 메시지 ID → 노드 이름 매핑 (중간 노드 추적용)
   const messageNodeMapRef = useRef(new Map<string, string>());
   const [messageNodeMap, setMessageNodeMap] = useState(
@@ -163,6 +177,35 @@ const StreamSession = ({
           const ui = uiMessageReducer(prev.ui ?? [], event);
           return { ...prev, ui };
         });
+        return;
+      }
+
+      // 그래프 진행 이벤트 ({stage, message} — graph_common.emit)
+      if (
+        event &&
+        typeof event === "object" &&
+        typeof (event as Record<string, unknown>).stage === "string" &&
+        typeof (event as Record<string, unknown>).message === "string"
+      ) {
+        const { stage, message, ...details } = event as {
+          stage: string;
+          message: string;
+        } & Record<string, unknown>;
+        const info: ProgressEventInfo = {
+          stage,
+          message,
+          timestamp: Date.now(),
+          details: Object.keys(details).length > 0 ? details : undefined,
+        };
+        const prev = progressEventsRef.current;
+        const last = prev[prev.length - 1];
+        // 같은 stage+message의 연속 이벤트(추출 진행률 등)는 마지막 항목 갱신
+        if (last && last.stage === stage && last.message === message) {
+          progressEventsRef.current = [...prev.slice(0, -1), info];
+        } else {
+          progressEventsRef.current = [...prev, info].slice(-200);
+        }
+        setProgressEvents(progressEventsRef.current);
       }
     },
     [],
@@ -403,6 +446,8 @@ const StreamSession = ({
       // 스레드 변경 시 노드 업데이트 및 매핑 초기화
       nodeUpdatesRef.current = [];
       setNodeUpdates([]);
+      progressEventsRef.current = [];
+      setProgressEvents([]);
       messageNodeMapRef.current.clear();
       setMessageNodeMap(new Map());
       prevAiMessageCountRef.current = 0;
@@ -488,6 +533,8 @@ const StreamSession = ({
   const clearNodeUpdates = useCallback(() => {
     nodeUpdatesRef.current = [];
     setNodeUpdates([]);
+    progressEventsRef.current = [];
+    setProgressEvents([]);
     messageNodeMapRef.current.clear();
     setMessageNodeMap(new Map());
     prevAiMessageCountRef.current = 0;
@@ -525,6 +572,7 @@ const StreamSession = ({
     () => ({
       ...streamValue,
       nodeUpdates,
+      progressEvents,
       clearNodeUpdates,
       deactivateAllNodes,
       updateNodeCompletedOutput,
@@ -534,6 +582,7 @@ const StreamSession = ({
     [
       streamValue,
       nodeUpdates,
+      progressEvents,
       clearNodeUpdates,
       deactivateAllNodes,
       updateNodeCompletedOutput,

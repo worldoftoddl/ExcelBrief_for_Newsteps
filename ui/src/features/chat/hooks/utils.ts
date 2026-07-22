@@ -39,7 +39,7 @@ export interface TaskScope {
 }
 
 // Re-export NodeUpdateInfo from Stream provider (single source of truth)
-export type { NodeUpdateInfo } from "@/providers/Stream";
+export type { NodeUpdateInfo, ProgressEventInfo } from "@/providers/Stream";
 
 // ============================================
 // Tool Name Helpers
