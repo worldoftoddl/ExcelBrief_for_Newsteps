@@ -19,6 +19,7 @@ import {
   fetchAvailableModels,
   getStoredModelSpec,
   storeModelSpec,
+  DEFAULT_MODEL_SPEC,
   type ModelOption,
 } from "@/lib/models";
 import { useSettings } from "@/shared/hooks/useSettings";
@@ -87,13 +88,16 @@ export function ThreadContent() {
   useEffect(() => {
     fetchAvailableModels().then((models) => {
       setAvailableModels(models);
-      // 저장된 선택이 목록에서 사라졌으면(키 회수 등) 첫 모델로 되돌린다
+      // 저장된 선택이 목록에서 사라졌으면(레지스트리 교체·키 회수 등)
+      // 기본 모델로 되돌린다 — 기본도 없으면 첫 모델
       if (
         models.length > 0 &&
         !models.some((m) => m.spec === getStoredModelSpec())
       ) {
-        setModelSpec(models[0].spec);
-        storeModelSpec(models[0].spec);
+        const fallback =
+          models.find((m) => m.spec === DEFAULT_MODEL_SPEC) ?? models[0];
+        setModelSpec(fallback.spec);
+        storeModelSpec(fallback.spec);
       }
     });
   }, []);

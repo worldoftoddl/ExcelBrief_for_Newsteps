@@ -5,7 +5,7 @@
  */
 
 export interface ModelOption {
-  /** resolve_model에 그대로 전달되는 스펙 (예: "anthropic:claude-sonnet-5") */
+  /** resolve_model에 그대로 전달되는 스펙 (예: "anthropic:claude-opus-4-5") */
   spec: string;
   label: string;
   provider: string;
@@ -18,58 +18,76 @@ export interface RegisteredModel extends ModelOption {
 
 export const MODEL_REGISTRY: RegisteredModel[] = [
   {
-    spec: "anthropic:claude-sonnet-5",
-    label: "Claude Sonnet 5 (고품질)",
+    spec: "anthropic:claude-opus-4-5",
+    label: "Claude Opus 4.5",
+    provider: "Anthropic",
+    envKeys: ["ANTHROPIC_API_KEY"],
+  },
+  {
+    spec: "anthropic:claude-sonnet-4-5",
+    label: "Claude Sonnet 4.5",
     provider: "Anthropic",
     envKeys: ["ANTHROPIC_API_KEY"],
   },
   {
     spec: "anthropic:claude-haiku-4-5-20251001",
-    label: "Claude Haiku 4.5 (기본·빠름)",
+    label: "Claude Haiku 4.5",
     provider: "Anthropic",
     envKeys: ["ANTHROPIC_API_KEY"],
-  },
-  {
-    spec: "openai:gpt-5.1",
-    label: "GPT-5.1",
-    provider: "OpenAI",
-    envKeys: ["OPENAI_API_KEY"],
-  },
-  {
-    spec: "openai:gpt-5-mini",
-    label: "GPT-5 mini (빠름)",
-    provider: "OpenAI",
-    envKeys: ["OPENAI_API_KEY"],
   },
   // Gemini는 -latest 별칭 사용 — 세대 교체(2.5 지원 종료 실측)에도 깨지지 않음
   {
     spec: "google_genai:gemini-pro-latest",
-    label: "Gemini Pro (최신)",
+    label: "Gemini Pro",
     provider: "Google",
     envKeys: ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
   },
   {
     spec: "google_genai:gemini-flash-latest",
-    label: "Gemini Flash (빠름)",
+    label: "Gemini Flash",
     provider: "Google",
     envKeys: ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+  },
+  {
+    spec: "google_genai:gemini-flash-lite-latest",
+    label: "Gemini Flash-Lite",
+    provider: "Google",
+    envKeys: ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+  },
+  {
+    spec: "openai:gpt-5.6-sol",
+    label: "GPT 5.6 Sol",
+    provider: "OpenAI",
+    envKeys: ["OPENAI_API_KEY"],
+  },
+  {
+    spec: "openai:gpt-5.6-terra",
+    label: "GPT 5.6 Terra",
+    provider: "OpenAI",
+    envKeys: ["OPENAI_API_KEY"],
+  },
+  {
+    spec: "openai:gpt-5.6-luna",
+    label: "GPT 5.6 Luna",
+    provider: "OpenAI",
+    envKeys: ["OPENAI_API_KEY"],
   },
   // HF Inference Providers 라우터 — 오픈모델 서버리스 (GPU Space 불필요)
   {
     spec: "hf:Qwen/Qwen3.6-27B",
-    label: "Qwen3.6 27B (오픈모델·HF)",
+    label: "Qwen3.6 27B",
     provider: "HuggingFace",
     envKeys: ["HF_INFERENCE_TOKEN"],
   },
   {
     spec: "hf:openai/gpt-oss-120b",
-    label: "gpt-oss 120B (오픈모델·HF)",
+    label: "gpt-oss 120B",
     provider: "HuggingFace",
     envKeys: ["HF_INFERENCE_TOKEN"],
   },
   {
     spec: "local:qwen3:8b-16k",
-    label: "Qwen3 8B (로컬 Ollama)",
+    label: "Qwen3 8B",
     provider: "Local",
     envKeys: ["LOCAL_LLM_BASE_URL"],
   },
