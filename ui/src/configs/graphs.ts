@@ -18,23 +18,11 @@ export interface GraphMeta {
  */
 export const GRAPH_META: Record<string, GraphMeta> = {
   agent: {
-    displayName: "All-in-One Agent",
+    displayName: "조서와 대화하기",
     description:
       "조서 읽기·표 SQL·기준서 검색·웹 검색·웹 추출 도구를 모두 쥔 범용 ReAct 에이전트 — " +
       "여러 파일을 넘나드는 질문이나 기준서 자체 질문은 여기서 하세요.",
     starters: CHAT_STARTERS,
-  },
-  explainer: {
-    displayName: "조서 해설 Agent",
-    description:
-      "조서 하나를 정독해 구조·수행 절차·근거 기준을 신입 눈높이로 해설합니다 — " +
-      "해설할 조서를 첨부하거나 파일명을 언급하세요.",
-    starters: [
-      "데모조서 5300 현금및현금성자산 조서를 해설해줘.",
-      "작성중인 데모조서 5400 매출채권 조서를 해설해줘. 어떤 절차가 수행됐어?",
-      "감사조서서식_3650 감사 전 재무제표 확인 서식이 뭔지 설명해줘.",
-      "3900 핵심감사사항 조서에는 무엇을 채워야 해?",
-    ],
   },
   analyst: {
     displayName: "대형 엑셀 분석 Agent",
@@ -59,15 +47,10 @@ export const GRAPH_META: Record<string, GraphMeta> = {
       "카카오의 최근 이슈와 유의적 위험 후보를 정리해줘.",
     ],
   },
-  reviewer: {
-    displayName: "조서 검토 Agent",
-    description:
-      "작성 중인 감사조서의 완성도를 점검합니다 — 절차 누락, 서명란 공란, " +
-      "검산(tie-out) 이상을 찾아 보고서로 정리합니다.",
-    starters: [
-      "작성중인 데모조서 5400 매출채권 조서를 검토해줘.",
-      "데모조서 5300 현금및현금성자산 조서의 완성도를 점검해줘.",
-      "감사조서서식_2700A 중요성요약표에 채워야 할 항목이 남았는지 검토해줘.",
-    ],
-  },
 };
+
+/**
+ * UI에서 숨기는 graph_id — 서버에는 등록돼 있지만 셀렉터에 노출하지 않는다.
+ * (explainer·reviewer의 역할은 agent가 대체)
+ */
+export const HIDDEN_GRAPH_IDS: readonly string[] = ["explainer", "reviewer"];

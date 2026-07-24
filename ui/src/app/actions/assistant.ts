@@ -13,6 +13,7 @@ import { isValidUUID } from "@/lib/utils/uuid";
 import { getAuthHeaders } from "@/lib/auth/jwt";
 import { resolveConnection } from "@/lib/connections/resolve";
 import { requireAuth } from "@/lib/auth/require-auth";
+import { HIDDEN_GRAPH_IDS } from "@/configs/graphs";
 
 // Types
 export interface AssistantConfig {
@@ -126,6 +127,11 @@ function extractFinalNodeNames(graph: GraphStructure): string[] {
   return inputNodes.size > 0 ? Array.from(inputNodes) : directToEndNodes;
 }
 
+/** UI에 노출하지 않는 그래프(HIDDEN_GRAPH_IDS)의 assistant 제외 */
+function filterHiddenGraphs(assistants: Assistant[]): Assistant[] {
+  return assistants.filter((a) => !HIDDEN_GRAPH_IDS.includes(a.graph_id));
+}
+
 /**
  * Search assistants
  */
@@ -147,7 +153,10 @@ export async function searchAssistantsAction(): Promise<{
       sortBy: "assistant_id",
     });
 
-    return { assistants: assistants as Assistant[], error: null };
+    return {
+      assistants: filterHiddenGraphs(assistants as Assistant[]),
+      error: null,
+    };
   } catch (error) {
     console.error("[Action] Failed to search assistants:", error);
     return { assistants: [], error: "Failed to fetch assistants" };
@@ -192,7 +201,7 @@ export async function getAssistantDataAction(
       resolveAssistantIdInternal(client, assistantIdOrGraphId),
     ]);
 
-    const assistants = assistantsResult as Assistant[];
+    const assistants = filterHiddenGraphs(assistantsResult as Assistant[]);
 
     if (!resolvedId) {
       return {

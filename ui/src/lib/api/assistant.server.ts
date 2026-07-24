@@ -9,6 +9,7 @@ import { Client } from "@langchain/langgraph-sdk";
 import type { Assistant, AssistantSchemas } from "@/app/actions/assistant";
 import { isValidUUID } from "@/lib/utils/uuid";
 import { getAuthHeaders } from "@/lib/auth/jwt";
+import { HIDDEN_GRAPH_IDS } from "@/configs/graphs";
 
 // Re-export types for backward compatibility
 export type { Assistant, AssistantSchemas };
@@ -139,7 +140,9 @@ export async function searchAssistantsServer(
       sortOrder: "asc",
       sortBy: "assistant_id",
     });
-    return assistants as Assistant[];
+    return (assistants as Assistant[]).filter(
+      (a) => !HIDDEN_GRAPH_IDS.includes(a.graph_id),
+    );
   } catch (error) {
     console.error("[Server] Failed to search assistants:", error);
     return [];
